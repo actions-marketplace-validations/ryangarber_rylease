@@ -1,0 +1,66 @@
+{
+	"name": "rylease",
+	"type": "module",
+	"description": "A release pipeline that doesn't fight you.",
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.mjs",
+	"types": "./dist/index.d.mts",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/index.d.mts",
+				"default": "./dist/index.mjs"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"!dist/action.mjs"
+	],
+	"scripts": {
+		"lint": "biome check --write",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"build": "tsdown",
+		"build:action": "tsdown --filter action",
+		"gen:docs": "node scripts/docs.ts"
+	},
+	"keywords": [
+		"github",
+		"release",
+		"actions",
+		"runner",
+		"changelog",
+		"semantic",
+		"please"
+	],
+	"author": "Ryan Garber <ryanmichaelgarber@gmail.com>",
+	"license": "MIT",
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.15",
+		"@types/node": "^22.20.5",
+		"tsdown": "^0.23.1",
+		"typescript": "^7.0.2",
+		"vitest": "^5.0.3",
+		"yaml": "^2.9.1"
+	},
+	"repository": {
+		"url": "https://github.com/ryangarber/rylease.git"
+	},
+	"packageManager": "pnpm@12.11.2+sha512.25a51652a196785af5f28bda6dfe8dc582ebefa4ac1d180221ce1390231c5fb76637822ea4b6e4633ce74acdcb0a77f725af11bad38177fdeddaee818a955cb9",
+	"devEngines": {
+		"runtime": {
+			"name": "node",
+			"version": "^24.0.0",
+			"onFail": "download"
+		}
+	},
+	"dependencies": {
+		"zod": "^4.6.7"
+	}
+}

@@ -1,0 +1,38 @@
+name: rylease
+description: A release pipeline that doesn't fight you.
+author: Ryan Garber
+branding:
+  icon: tag
+  color: green
+inputs:
+  steps:
+    description: >
+      The steps to run, as a YAML list. Each entry is a step or preset name, or
+      a map of one name to its options. Names can be bundled steps, paths to
+      files (./release/announce.ts), or installed packages (pkg or pkg#export).
+    default: "- conventional"
+  dry-run:
+    description: Run every step without side effects, reporting what each would do.
+    default: "false"
+  working-directory:
+    description: The project to release, relative to the workspace.
+    default: "."
+  token:
+    description: Used for GitHub API calls when GITHUB_TOKEN isn't set.
+    default: ${{ github.token }}
+outputs:
+  status:
+    description: "`released`, `unchanged` or `failed`."
+  released:
+    description: "`true` when there was something to release (in a dry run, when there would have been)."
+  previous-version:
+    description: The version before this release.
+  version:
+    description: The released version, when there was one.
+  kind:
+    description: "`major`, `minor`, `patch` or `none`."
+  notes:
+    description: The release notes.
+runs:
+  using: node24
+  main: dist/action.mjs
