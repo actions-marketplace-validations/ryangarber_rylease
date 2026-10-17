@@ -96,6 +96,7 @@ export function classify(
 }
 
 /** Looks up `type(scope)`, then `type`, in a map keyed by either. */
+/** @lintignore */
 export function typeKey<V>(
 	title: Title,
 	map: Readonly<Record<string, V>>,

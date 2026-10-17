@@ -4,13 +4,9 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineRelease } from "../define.ts";
 import { ReleaseError } from "../engine.ts";
+import { conventional } from "../presets/index.ts";
 import { git } from "../utils/git.ts";
-import {
-	conventional,
-	gitCommit,
-	readGitTag,
-	readPackageJson,
-} from "./index.ts";
+import { gitCommit, readGitTag, readPackageJson } from "./index.ts";
 
 let root: string;
 let cwd: string;

@@ -1,7 +1,8 @@
 import { describe, expectTypeOf, it } from "vitest";
 import { defineRelease, defineStep } from "./define.ts";
-import { steps } from "./index.ts";
 import { z } from "./options.ts";
+import * as presets from "./presets/index.ts";
+import * as steps from "./steps/index.ts";
 import type { Change, ReleaseKind, ReleaseResult, StepInput } from "./types.ts";
 
 describe("step inputs", () => {
@@ -71,7 +72,7 @@ describe("context", () => {
 		defineRelease<{ count: number }>({
 			context: { count: 0 },
 			steps: [
-				...steps.conventional(),
+				...presets.conventional(),
 				{
 					type: "release",
 					name: "count",
@@ -86,9 +87,9 @@ describe("context", () => {
 	});
 
 	it("is required only when the context type needs it", () => {
-		defineRelease({ steps: steps.conventional() });
+		defineRelease({ steps: presets.conventional() });
 		// @ts-expect-error missing context
-		defineRelease<{ count: number }>({ steps: steps.conventional() });
+		defineRelease<{ count: number }>({ steps: presets.conventional() });
 	});
 });
 
@@ -126,14 +127,14 @@ describe("step options", () => {
 	});
 
 	it("type preset options by step name", () => {
-		steps.conventional({
+		presets.conventional({
 			"github-release": false,
 			"conventional-kind": { types: { docs: "none" }, fallback: "none" },
 			semver: { shiftPreMajor: false },
 		});
 		// @ts-expect-error not a step of the preset
-		steps.conventional({ nope: false });
+		presets.conventional({ nope: false });
 		// @ts-expect-error wrong option type
-		steps.conventional({ semver: { shiftPreMajor: "no" } });
+		presets.conventional({ semver: { shiftPreMajor: "no" } });
 	});
 });

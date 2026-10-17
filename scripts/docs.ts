@@ -4,7 +4,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { z } from "../src/options.ts";
-import { conventional } from "../src/steps/index.ts";
+import { conventional } from "../src/presets/index.ts";
 
 interface Schema {
 	type?: string;

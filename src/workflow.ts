@@ -3,8 +3,16 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AnyStepFactory, Preset } from "./define.ts";
 import { joinPath, OptionsError } from "./options.ts";
-import { builtins } from "./steps/index.ts";
+import * as presets from "./presets/index.ts";
+import * as steps from "./steps/index.ts";
 import { PHASES, type Step } from "./types.ts";
+
+const builtins = new Map<string, AnyStepFactory | Preset>(
+	[...Object.values(steps), ...Object.values(presets)].map((item) => [
+		item.name,
+		item,
+	]),
+);
 
 export interface WorkflowOptions {
 	/** Paths and packages are resolved from here. */
