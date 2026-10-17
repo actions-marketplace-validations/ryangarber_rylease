@@ -45,7 +45,7 @@ jobs:
           cd fixture
           git config user.name test
           git config user.email test@example.com
-          echo '{ "name": "fixture", "version": "1.0.0" }' > package.json
+          echo '{ "name": "fixture", "version": "1.0.0", "type": "module" }' > package.json
           mkdir release
           cat > release/hello.ts <<'TS'
           import { defineStep, z } from "rylease";
