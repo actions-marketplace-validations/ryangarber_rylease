@@ -19,21 +19,24 @@ steps:
   - uses: actions/checkout@v7
     with:
       fetch-depth: 0 # full history is needed to find the previous release
-  - uses: ryangarber/rylease@v1
+  - uses: ryangarber/rylease@v2
 ```
 
-That runs the bundled `conventional` preset. To configure it, or add more steps, use `steps`: a YAML list where each entry is a name, or a map of one name to its options.
+That runs the bundled `conventional` preset. To configure it, or add more steps, use `steps`: a list shaped like a workflow's. Each entry `uses` a step or preset, gives it options `with`, and may run only `if` an expression holds.
 
 ```yaml
-  - uses: ryangarber/rylease@v1
+  - uses: ryangarber/rylease@v2
     with:
       steps: |
-        - conventional:
+        - uses: conventional
+          with:
             github-release: { draft: true }
             conventional-kind:
               types: { docs: none, chore: none, "chore(deps)": patch }
             prepend-changelog: false
-        - ./.github/release/announce.ts:
+        - uses: ./.github/release/announce.ts
+          if: "!dryRun && kind != 'patch'"
+          with:
             channel: "#releases"
 ```
 
@@ -54,18 +57,104 @@ rylease release · main · /home/runner/work/project/project
   1.0.0 → 1.1.0 (minor) · released
 ```
 
-- **Names** can be a bundled step or preset, a path to a file (`./release/announce.ts`, its default export), or an installed package (`some-package`, or `some-package#namedExport`). `.ts` files run as they are; they can `import { defineStep, z } from "rylease"` without installing it.
-- **Presets** take options for each of their steps by name. `false` leaves a step out, for instance to replace it with your own. Listing a step that a preset already has is an error, so nothing runs twice by accident.
-- **Options** are checked before anything runs. A typo fails the job with its exact location, e.g. `steps[0].conventional.semver: Unrecognized key: "shift"`.
+- **`uses`** names a bundled step or preset, a path to a file (`./release/announce.ts`, its default export), or an installed package (`some-package`, or `some-package#namedExport`). `.ts` files run as they are; they can `import { defineStep, z } from "rylease"` without installing it.
+- **`with`** holds the options. A preset takes options for each of its steps by name, and `false` leaves a step out, for instance to replace it with your own, or to list it again with an `if`. Listing a step that a preset already has is an error, so nothing runs twice by accident.
+- **`if`** runs the step only when an expression holds; see [Conditions](#conditions). On a preset, it applies to each of its steps.
+- **Options** are checked before anything runs. A typo fails the job with its exact location, e.g. `steps[0].with.semver: Unrecognized key: "shift"`.
 
 | Input | Default | |
 |---|---|---|
-| `steps` | `- conventional` | The steps, as above. |
+| `steps` | `- uses: conventional` | The steps, as above. |
 | `dry-run` | `false` | Runs every step without side effects; each reports what it would do. |
+| `version` | | A version that's already been released, e.g. by an earlier job: only the `release` steps run, for it. |
+| `notes` | | The release notes, along with `version`. |
 | `working-directory` | `.` | The project to release, e.g. a package in a monorepo. |
+| `summary` | `true` | Writes the release, a row per step and the notes to the job's summary page. |
 | `token` | `${{ github.token }}` | Used when `GITHUB_TOKEN` isn't set. |
 
 Outputs: `status` (`released`, `unchanged` or `failed`), `released` (`true`/`false`), `previous-version`, `version`, `kind` and `notes`.
+
+### Conditions
+
+`if` is evaluated just before the step would run, so it can depend on what earlier steps did:
+
+```yaml
+- uses: npm-publish
+  if: "!dryRun && !startsWith(version, '0.')"
+- uses: ./release/announce.ts
+  if: kind == 'major' || contains(notes, 'security')
+- uses: ./release/link.ts
+  if: steps.github-release.output.url != null
+```
+
+| Name | |
+|---|---|
+| `dryRun`, `branch`, `cwd` | The run's environment. |
+| `previousVersion`, `previousRef`, `changes`, `kind`, `version`, `notes` | The release so far; a value is `null` until its phase has run. |
+| `steps.<name>` | Each step that ran before: its `type`, `status` (`ok` or `skipped`), `reason` and `output`. |
+
+Expressions are written like GitHub's: `'strings'` (`''` for a quote), numbers, `true`, `false` and `null`; `.name` and `['name']`; `!`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||` and parentheses; and `contains(text or list, value)`, `startsWith(text, prefix)` and `endsWith(text, suffix)`. Comparisons are exact, and case-sensitive. An `if` starting with `!` needs quotes in YAML.
+
+GitHub fills in `${{ ... }}` in `steps` before rylease reads it, so `if: ${{ github.event_name == 'workflow_dispatch' }}` works too and becomes `if: true` or `if: false`. If conditions skip every step of a phase, the next phase fails, since it has nothing to go on.
+
+In TypeScript, a condition is a function of what the step receives: `when(steps.npmPublish(), ({ env }) => !env.dryRun)`.
+
+### Publishing to npm
+
+Add `npm-publish` after `conventional`. It publishes with `pnpm` or `npm`, whichever the project uses, so lifecycle scripts like `prepublishOnly` run as usual. Install dependencies first, and set up pnpm if the project uses it.
+
+```yaml
+permissions:
+  contents: write
+  id-token: write # for trusted publishing, or provenance
+steps:
+  - uses: actions/checkout@v7
+    with:
+      fetch-depth: 0
+  - uses: pnpm/setup@v3 # installs dependencies too
+  - uses: ryangarber/rylease@v2
+    with:
+      steps: |
+        - uses: conventional
+        - uses: npm-publish
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # not needed with trusted publishing
+```
+
+It publishes the version that `write-package-json` wrote, after the release is committed, tagged and pushed, and refuses to publish any other.
+
+### Uploading builds to the release
+
+Jobs that build after the release, say one per platform, can each upload their files to it. Pass the version (and notes) the release job worked out, and only the `release` steps run. Here the `release` job passes on rylease's `released`, `version` and `notes` outputs, and whether it was a dry run, as its own outputs:
+
+```yaml
+  build:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.release.outputs.version }}
+      - run: npm ci && npm run build
+      - uses: ryangarber/rylease@v2
+        with:
+          version: ${{ needs.release.outputs.version }}
+          notes: ${{ needs.release.outputs.notes }}
+          dry-run: ${{ needs.release.outputs.dry-run }}
+          steps: |
+            - uses: github-release-assets
+              with:
+                files: ["dist/app-*"]
+                dryRunArtifact: true
+```
+
+`github-release-assets` uploads to the release that `github-release` created, or creates it if no job has yet. When several jobs race to, the losers wait for the winner's release and use it. Failed requests and uploads are retried, and an upload that failed halfway is cleared first. With `dryRunArtifact`, a dry run keeps the files as a workflow artifact instead, so a dry run of the whole pipeline leaves every build to download. `github-artifact` does the same for any files, in a dry run or not.
 
 ## TypeScript
 
@@ -91,6 +180,8 @@ await defineRelease({
 	});
 ```
 
+`markdownSummary(report)` renders a report as the Markdown the action writes to the job summary.
+
 ## Steps
 
 | Type | Receives (plus `env`, `context`, `history`) | Returns |
@@ -106,7 +197,7 @@ await defineRelease({
 - **Chaining.** When several steps share a type, each later one receives the current value as an optional input (e.g. `notes?`). Whatever it returns replaces that value. `release` outputs accumulate instead.
 - **One source of truth.** A step takes what it needs from earlier phases and never works it out again. `ref` is the commit of the previous release, and changes are collected from there. `files` lists what a `release` step changed, and `git-commit` commits exactly those.
 - **Nothing to release.** If the final `release-kind` is `"none"`, the remaining steps are skipped.
-- **Dry run.** Steps get `env.dryRun`. Steps with side effects must do nothing and explain what they *would* have done.
+- **Dry run.** Steps get `env.dryRun`. Steps with side effects must do nothing and explain what they *would* have done. The one exception is `dryRunArtifact`, which keeps files as an artifact of the workflow run, which only that run sees.
 - **Audit.** `run()` resolves to a report with a record (type, name, status, duration, reason, output) for every step. On failure it rejects with a `ReleaseError` whose `.report` holds the same records.
 
 ### Custom steps
@@ -247,7 +338,7 @@ Commits the files earlier release steps changed, tags the commit and pushes both
 
 #### `github-release` · `release`
 
-Creates a GitHub release with the notes. Needs a token with `contents: write`.
+Creates a GitHub release with the notes, unless the tag already has one. Needs a token with `contents: write`.
 
 | Option | Type | Default | |
 |---|---|---|---|
@@ -257,4 +348,50 @@ Creates a GitHub release with the notes. Needs a token with `contents: write`.
 | `prerelease` | `boolean` | `false` |  |
 | `repo` | `string` |  | `owner/repo`; defaults to `GITHUB_REPOSITORY` or the `origin` remote. |
 | `token` | `string` |  | Defaults to `GITHUB_TOKEN` or `GH_TOKEN`. |
+
+### More steps
+
+These aren't in `conventional`; list them after it.
+
+#### `github-artifact` · `release`
+
+Uploads files as a workflow artifact. Only works in the GitHub Action.
+
+| Option | Type | Default | |
+|---|---|---|---|
+| `name` | `string` | required | The artifact's name, unique in the run; `{version}` is filled in. |
+| `files` | `string[]` | required | Paths, globs or directories, relative to the working directory unless absolute; each must match. |
+| `dryRunArtifact` | `boolean` | `false` | Upload in dry runs too. |
+| `retentionDays` | `integer` |  | Defaults to the repository's setting. |
+
+#### `github-release-assets` · `release`
+
+Uploads files to the GitHub release, creating it (with the notes) if no other job has yet.
+
+| Option | Type | Default | |
+|---|---|---|---|
+| `files` | `string[]` | required | Paths or globs, relative to the working directory unless absolute; each must match. |
+| `clobber` | `boolean` | `true` | Replace assets of the same name. |
+| `dryRunArtifact` | `boolean` | `false` | In dry runs, keep the files as a workflow artifact instead; only in the GitHub Action. |
+| `artifactName` | `string` |  | Unique in the run; `{version}` is filled in. Defaults to the asset's name, or for several, a name made from theirs. |
+| `tag` | `string` | `v{version}` | The release's tag; created at HEAD if it doesn't exist. |
+| `title` | `string` |  | `{version}` is filled in; defaults to the tag. |
+| `draft` | `boolean` | `false` |  |
+| `prerelease` | `boolean` | `false` |  |
+| `repo` | `string` |  | `owner/repo`; defaults to `GITHUB_REPOSITORY` or the `origin` remote. |
+| `token` | `string` |  | Defaults to `GITHUB_TOKEN` or `GH_TOKEN`. |
+
+#### `npm-publish` · `release`
+
+Publishes the package to the npm registry with `npm` or `pnpm publish`.
+
+| Option | Type | Default | |
+|---|---|---|---|
+| `path` | `string` | `.` | The package's directory, relative to the working directory. |
+| `client` | `npm \| pnpm` |  | Defaults to the `packageManager` in package.json, then `pnpm` if there's a `pnpm-lock.yaml`, then `npm`. |
+| `tag` | `string` |  | The dist-tag; defaults to `publishConfig.tag`, or `latest`. |
+| `access` | `public \| restricted` |  | Defaults to `publishConfig.access`. |
+| `provenance` | `boolean` | `false` | Publishes with a provenance statement; needs `id-token: write`. |
+| `registry` | `string` |  | Defaults to `publishConfig.registry`, or the npm registry. |
+| `token` | `string` |  | Defaults to `NPM_TOKEN` or `NODE_AUTH_TOKEN`; without one, the client's own auth is used, e.g. trusted publishing. |
 <!-- options:end -->
