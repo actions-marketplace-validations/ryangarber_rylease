@@ -5,13 +5,57 @@ branding:
   icon: tag
   color: green
 inputs:
+  config:
+    description: >
+      A config file with the release's steps, scheme, tag, history, components
+      and channels: rylease.yml, or rylease.config.ts exporting a release made
+      with defineRelease. Defaults to the first of rylease.config.ts,
+      rylease.yml and .github/rylease.yml there is. Other inputs override its
+      keys.
+    default: ""
   steps:
     description: >
       The steps to run, as a YAML list, like a workflow's: each entry `uses` a
       step or preset, passes it options `with`, and may run only `if` an
       expression holds. Steps can be bundled ones, paths to files
       (./release/announce.ts), or installed packages (pkg or pkg#export).
-    default: "- uses: conventional"
+      Defaults to the config's, or `- uses: conventional`.
+    default: ""
+  scheme:
+    description: >
+      How versions look and are bumped: `semver`, `calver`, or
+      `{ uses: calver, with: { format: YY.MINOR.MICRO } }`, or a path or
+      package like a step's. Defaults to the preset's; needed without one.
+    default: ""
+  tag:
+    description: >
+      Each release's tag; `{version}` and `{name}` (the component's) are
+      filled in. Defaults to `v{version}`, or `{name}@{version}` with several
+      components.
+    default: ""
+  history:
+    description: >
+      Where previous releases are found: `git/tags` (the nearest release tag
+      on HEAD), `fs/version-file`, `github/release-pr`, or a list of them, the
+      first that finds one winning. Defaults to the preset's; needed without
+      one.
+    default: ""
+  components:
+    description: >
+      What's versioned and released, for monorepos: `npm/workspaces`, or a
+      YAML list of `{ name, path, dependsOn, tag, scheme, history }`.
+      Defaults to the whole project, as one component.
+    default: ""
+  channels:
+    description: >
+      Prerelease and build channels, as a YAML map, e.g.
+      `{ next: { branches: [next] }, nightly: { type: build } }`.
+    default: ""
+  channel:
+    description: >
+      The channel to release on. Defaults to the first channel whose branches
+      match, or a stable release.
+    default: ""
   dry-run:
     description: Run every step without side effects, reporting what each would do.
     default: "false"
@@ -24,6 +68,9 @@ inputs:
   notes:
     description: The release notes, along with `version`.
     default: ""
+  component:
+    description: The component `version` is for, when there are several.
+    default: ""
   working-directory:
     description: The project to release, relative to the workspace.
     default: "."
@@ -35,17 +82,27 @@ inputs:
     default: ${{ github.token }}
 outputs:
   status:
-    description: "`released`, `unchanged` or `failed`."
+    description: "`released`, `pending` (left to a release pull request), `unchanged` or `failed`."
   released:
     description: "`true` when there was something to release (in a dry run, when there would have been)."
   previous-version:
-    description: The version before this release.
+    description: The version before this release; with several components, see `components`.
   version:
     description: The released version, when there was one.
   kind:
-    description: "`major`, `minor`, `patch` or `none`."
+    description: "`breaking`, `feature`, `fix` or `none`."
   notes:
     description: The release notes.
+  channel:
+    description: The channel released on, if any.
+  prerelease:
+    description: "`true` when released on a prerelease channel."
+  components:
+    description: >
+      Each component, by name, as JSON: `{ path, status, released,
+      previous-version, version, tag, kind, notes }`.
+  released-components:
+    description: The names of the released components, as a JSON list, e.g. for a matrix.
 runs:
   using: node24
   main: dist/action.mjs

@@ -11,12 +11,30 @@ export default defineConfig([
 			sourcemap: true,
 		},
 		sourcemap: true,
-		skipNodeModulesBundle: true,
+		deps: {
+			neverBundle: true,
+		},
+	},
+	{
+		// The CLI: one self-contained file, like the action, run as `rylease`.
+		name: "cli",
+		entry: { cli: "src/cli.ts" },
+		format: ["esm"],
+		platform: "node",
+		target: "node24",
+		deps: {
+			alwaysBundle: ["yaml", "zod"],
+			onlyBundle: false,
+		},
+		dts: false,
+		sourcemap: false,
+		clean: false,
+		minify: true,
 	},
 	{
 		// The GitHub Action: one self-contained file, committed to the repository.
 		name: "action",
-		entry: { action: "src/action.ts" },
+		entry: { action: "src/config/action.ts" },
 		format: ["esm"],
 		platform: "node",
 		target: "node24",
