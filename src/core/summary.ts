@@ -62,7 +62,7 @@ export function markdownSummary(report: ReleaseReport): string {
 		several ? "|:-:|---|---|---|--:|---|" : "|:-:|---|---|--:|---|",
 		...report.records.map(
 			(record) =>
-				`| ${ICONS[record.status]} |${several ? ` ${record.component ? `\`${record.component}\`` : "all"} |` : ""} \`${record.type}\` | \`${record.name}\` | ${
+				`| ${ICONS[record.status]} |${several ? ` ${record.component ? `\`${record.component}\`` : "all"} |` : ""} \`${record.phase}\` | \`${record.name}\` | ${
 					record.status === "skipped" ? "" : formatDuration(record.durationMs)
 				} | ${cell(record.reason)} |`,
 		),

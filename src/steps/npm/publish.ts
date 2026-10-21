@@ -14,7 +14,7 @@ const DEFAULT_REGISTRY = "https://registry.npmjs.org/";
  * `package.json`. Lifecycle scripts like `prepublishOnly` run as usual.
  */
 export const npmPublish = defineStep({
-	type: "release",
+	phase: "release",
 	name: "npm/publish",
 	description:
 		"Publishes the component's package to the npm registry with `npm` or `pnpm publish`; components are published dependencies first.",

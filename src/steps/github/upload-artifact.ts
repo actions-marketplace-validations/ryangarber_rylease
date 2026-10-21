@@ -10,7 +10,7 @@ import { canUploadArtifacts, uploadFiles } from "./artifact.ts";
  * dry runs too, e.g. to keep what a dry run built.
  */
 export const githubUploadArtifact = defineStep({
-	type: "release",
+	phase: "release",
 	name: "github/upload-artifact",
 	description:
 		"Uploads files as a workflow artifact. Only works in the GitHub Action.",

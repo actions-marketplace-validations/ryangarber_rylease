@@ -11,7 +11,7 @@ import { releasedPlaceholders } from "./placeholders.ts";
  * tags together.
  */
 export const gitCommit = defineStep({
-	type: "commit",
+	phase: "stage",
 	name: "git/commit",
 	scope: "all",
 	description:

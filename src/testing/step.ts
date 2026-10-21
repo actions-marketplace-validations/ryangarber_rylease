@@ -6,9 +6,9 @@ import type {
 	Dependency,
 	EachStepDefinition,
 	Environment,
+	Phase,
 	StepOutputs,
 	StepResults,
-	StepType,
 } from "../core/types.ts";
 import { versionValues } from "../utils/template.ts";
 
@@ -24,7 +24,7 @@ export const root: ComponentInfo = {
  * What a step receives: the component defaults to {@link root}, the tag to
  * `v{version}`, and the placeholders to the version's.
  */
-export type Results<T extends StepType> = Omit<
+export type Results<T extends Phase> = Omit<
 	StepResults[T],
 	"component" | "tag" | "placeholders" | "dependencies"
 > & {
@@ -48,12 +48,12 @@ function input(env: Partial<Environment>) {
  * Runs one step on its own, given what earlier phases would have produced;
  * an `all` step gets one component, or each of `results` when it's a list.
  */
-export async function runStep<T extends StepType>(
+export async function runStep<T extends Phase>(
 	step: EachStepDefinition<T>,
 	results: NoInfer<Results<T>>,
 	env?: Partial<Environment>,
 ): Promise<StepOutputs[T]>;
-export async function runStep<T extends StepType>(
+export async function runStep<T extends Phase>(
 	step: AllStepDefinition<T>,
 	results: NoInfer<Results<T> | readonly Results<T>[]>,
 	env?: Partial<Environment>,

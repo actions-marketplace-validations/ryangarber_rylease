@@ -19,17 +19,17 @@ interface PullRequest {
 
 /**
  * Proposes the release as a pull request instead of releasing it: commits
- * what earlier `prepare` steps changed to a release branch, and opens a pull
+ * what earlier `write` steps changed to a release branch, and opens a pull
  * request for it, or updates the one that's open. The release steps wait
  * until it merges; then the `github/release-pr` history finds it, and they
  * run for what it proposed.
  */
 export const githubOpenReleasePr = defineStep({
-	type: "commit",
+	phase: "stage",
 	name: "github/open-release-pr",
 	scope: "all",
 	description:
-		"Commits the prepared release to a branch and opens a pull request for it, or updates the open one; the release waits until it merges. Use with the `github/release-pr` history. List it after other `prepare` steps, in place of `git/commit`.",
+		"Commits the prepared release to a branch and opens a pull request for it, or updates the open one; the release waits until it merges. Use with the `github/release-pr` history. List it after the `write` steps, in place of `git/commit`.",
 	options: {
 		branch: z
 			.string()

@@ -9,7 +9,7 @@ import { directoryOption, kindFor, readChangeFiles } from "./files.ts";
  * `labels/determine-kind` and `labels/build-notes`.
  */
 export const changeFilesRead = defineStep({
-	type: "read-changes",
+	phase: "read-changes",
 	name: "change-files/read",
 	scope: "all",
 	provides: ["changes.title", "changes.labels"],

@@ -10,7 +10,7 @@ const RANK: Record<Kind, number> = { none: 0, fix: 1, feature: 2, breaking: 3 };
  * highest of them, or `fallback` when none is mapped. The highest kind wins.
  */
 export const labelsDetermineKind = defineStep({
-	type: "determine-kind",
+	phase: "determine-kind",
 	name: "labels/determine-kind",
 	description:
 		"By each change's labels, e.g. a pull request's (`breaking` → breaking, `enhancement` → feature, anything else → fix). The highest kind wins.",

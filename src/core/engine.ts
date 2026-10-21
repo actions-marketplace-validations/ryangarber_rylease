@@ -30,11 +30,11 @@ import {
 	KINDS,
 	type Kind,
 	PHASES,
+	type Phase,
 	type ReleaseKind,
 	type ReleaseResult,
 	type Step,
 	type StepRecord,
-	type StepType,
 } from "./types.ts";
 
 export interface RunOptions {
@@ -87,7 +87,7 @@ export interface ReleaseSetup<Ctx> {
 }
 
 /**
- * `pending` when a `prepare` step left the release to later, e.g. to a
+ * `pending` when a `write` step left the release to later, e.g. to a
  * release pull request.
  */
 export type ReleaseStatus = "released" | "pending" | "unchanged" | "failed";
@@ -120,7 +120,7 @@ export interface ReleaseReport {
 	kind?: Kind;
 	version?: string;
 	notes?: string;
-	/** With one component, the results of its `prepare` and `release` steps. */
+	/** With one component, the results of its `write`, `stage` and `release` steps. */
 	releases: ReleaseResult[];
 	/** Why the release was left to later, when it's `pending`. */
 	deferred?: string;
@@ -137,15 +137,15 @@ export class ReleaseError extends Error {
 	}
 }
 
-function phaseIndex(type: StepType): number {
-	return PHASES.indexOf(type);
+function phaseIndex(phase: Phase): number {
+	return PHASES.indexOf(phase);
 }
 
 const KIND_PHASE = phaseIndex("determine-kind");
 
 /** Phases that must have at least one step for a release to be possible. */
 const REQUIRED_PHASES = PHASES.filter(
-	(type) => type !== "prepare" && type !== "commit" && type !== "release",
+	(phase) => phase !== "write" && phase !== "stage" && phase !== "release",
 );
 
 /** What each phase produces, where later phases read it. */
@@ -153,10 +153,10 @@ const PHASE_VALUES = {
 	"read-changes": "changes",
 	"determine-kind": "kind",
 	"build-notes": "notes",
-	prepare: "releases",
-	commit: "releases",
+	write: "releases",
+	stage: "releases",
 	release: "releases",
-} as const satisfies Record<StepType, keyof State>;
+} as const satisfies Record<Phase, keyof State>;
 
 const CHANGE_FACTS = [
 	"changes.title",
@@ -193,16 +193,16 @@ interface State {
 	given: string | undefined;
 }
 
-/** Stable sort of steps by phase; steps of the same type keep their order. */
-export function sortSteps<S extends { type: StepType }>(
+/** Stable sort of steps by phase; steps of the same phase keep their order. */
+export function sortSteps<S extends { phase: Phase }>(
 	steps: readonly S[],
 ): S[] {
-	return [...steps].sort((a, b) => phaseIndex(a.type) - phaseIndex(b.type));
+	return [...steps].sort((a, b) => phaseIndex(a.phase) - phaseIndex(b.phase));
 }
 
 /** Steps as the engine handles them, whatever their phase and scope. */
 type AnyStep = {
-	type: StepType;
+	phase: Phase;
 	name: string;
 	scope?: "each" | "all";
 	needs?: readonly string[];
@@ -297,10 +297,10 @@ export async function runRelease<Ctx>(
 		[
 			...resolved.flatMap((component) => [
 				...historiesOf(component).map(({ name }) => ({
-					type: "previous" as const,
+					phase: "read-version" as const,
 					name,
 				})),
-				{ type: "version" as const, name: component.scheme.name },
+				{ phase: "determine-version" as const, name: component.scheme.name },
 			]),
 			...ordered,
 		],
@@ -314,7 +314,7 @@ export async function runRelease<Ctx>(
 		given.length > 0
 			? []
 			: REQUIRED_PHASES.filter(
-					(type) => !ordered.some((step) => step.type === type),
+					(phase) => !ordered.some((step) => step.phase === phase),
 				);
 	if (missing.length > 0) {
 		fail(new Error(`no step provided for: ${missing.join(", ")}`));
@@ -355,7 +355,7 @@ export async function runRelease<Ctx>(
 					state.facts.add("previousVersion");
 				}
 				record({
-					type: "previous",
+					phase: "read-version",
 					name: found.name,
 					component: state.component.info.name,
 					status: "ok",
@@ -382,7 +382,7 @@ export async function runRelease<Ctx>(
 				}
 			} catch (error) {
 				record({
-					type: "previous",
+					phase: "read-version",
 					name: historiesOf(state.component)
 						.map(({ name }) => name)
 						.join(", "),
@@ -412,7 +412,7 @@ export async function runRelease<Ctx>(
 	const skipRest = (from: number, reason: string) => {
 		for (const step of ordered.slice(from)) {
 			record({
-				type: step.type,
+				phase: step.phase,
 				name: step.name,
 				status: "skipped",
 				durationMs: 0,
@@ -427,9 +427,9 @@ export async function runRelease<Ctx>(
 	};
 
 	for (const [index, step] of ordered.entries()) {
-		if (publishing !== undefined && step.type !== "release") {
+		if (publishing !== undefined && step.phase !== "release") {
 			record({
-				type: step.type,
+				phase: step.phase,
 				name: step.name,
 				status: "skipped",
 				durationMs: 0,
@@ -437,7 +437,7 @@ export async function runRelease<Ctx>(
 			});
 			continue;
 		}
-		if (!bumped && phaseIndex(step.type) > KIND_PHASE) {
+		if (!bumped && phaseIndex(step.phase) > KIND_PHASE) {
 			bumped = true;
 			await bump(states, env, record, fail);
 			setDependencies(states);
@@ -447,7 +447,7 @@ export async function runRelease<Ctx>(
 			skipRest(index, "no release-worthy changes");
 			return finish("unchanged");
 		}
-		if (deferred !== undefined && step.type === "release") {
+		if (deferred !== undefined && step.phase === "release") {
 			skipRest(index, deferred);
 			return finish("pending");
 		}
@@ -460,7 +460,7 @@ export async function runRelease<Ctx>(
 			const component = target?.component.info.name;
 			try {
 				// Conditions may have skipped every step of an earlier phase.
-				for (const state of group) assertEarlierPhases(state, step.type);
+				for (const state of group) assertEarlierPhases(state, step.phase);
 				const input = target
 					? { ...values(target), ...shared(env, setup.context, records) }
 					: {
@@ -471,7 +471,7 @@ export async function runRelease<Ctx>(
 				if (condition && !condition(input)) {
 					const source = condition.source;
 					record({
-						type: step.type,
+						phase: step.phase,
 						name: step.name,
 						...(component !== undefined && { component }),
 						status: "skipped",
@@ -487,7 +487,7 @@ export async function runRelease<Ctx>(
 				const applied = apply(step, group, target === undefined, output);
 				deferred ??= applied.defer;
 				record({
-					type: step.type,
+					phase: step.phase,
 					name: step.name,
 					...(component !== undefined && { component }),
 					status: "ok",
@@ -498,7 +498,7 @@ export async function runRelease<Ctx>(
 			} catch (error) {
 				const message = errorMessage(error);
 				record({
-					type: step.type,
+					phase: step.phase,
 					name: step.name,
 					...(component !== undefined && { component }),
 					status: "failed",
@@ -506,10 +506,10 @@ export async function runRelease<Ctx>(
 					reason: message,
 					error,
 				});
-				skipRest(index + 1, `'${step.type}' step '${step.name}' failed`);
+				skipRest(index + 1, `'${step.phase}' step '${step.name}' failed`);
 				fail(
 					error,
-					`${step.type} step '${step.name}'${component !== undefined && states.length > 1 ? ` (${component})` : ""} failed: ${message}`,
+					`${step.phase} step '${step.name}'${component !== undefined && states.length > 1 ? ` (${component})` : ""} failed: ${message}`,
 				);
 			}
 		}
@@ -718,7 +718,7 @@ async function bump(
 		const start = performance.now();
 		const { scheme, info } = state.component;
 		const base = {
-			type: "version",
+			phase: "determine-version",
 			name: scheme.name,
 			component: info.name,
 		} as const;
@@ -885,7 +885,7 @@ function preflight(
 		const facts = new Set(state.facts);
 		let source: string | undefined;
 		for (const step of steps) {
-			if (given && step.type !== "release") continue;
+			if (given && step.phase !== "release") continue;
 			for (const fact of step.needs ?? []) {
 				if (facts.has(fact)) continue;
 				const by = isChangeFact(fact)
@@ -908,7 +908,7 @@ function preflight(
 							}`,
 				);
 			}
-			if (step.type === "read-changes" && !step.if) {
+			if (step.phase === "read-changes" && !step.if) {
 				for (const fact of [...facts])
 					if (isChangeFact(fact)) facts.delete(fact);
 				source = step.name;
@@ -934,8 +934,8 @@ function assertNeeds(step: AnyStep, state: State) {
 	}
 }
 
-function assertEarlierPhases(state: State, type: StepType) {
-	for (const phase of PHASES.slice(0, phaseIndex(type))) {
+function assertEarlierPhases(state: State, before: Phase) {
+	for (const phase of PHASES.slice(0, phaseIndex(before))) {
 		if (state[PHASE_VALUES[phase]] === undefined) {
 			throw new Error(
 				`no '${phase}' step ran, so it has no ${PHASE_VALUES[phase]}`,
@@ -979,12 +979,12 @@ function apply(
 ): { reason: string; defer?: string } {
 	const output = checkObject(value);
 	if (
-		step.type === "prepare" ||
-		step.type === "commit" ||
-		step.type === "release"
+		step.phase === "write" ||
+		step.phase === "stage" ||
+		step.phase === "release"
 	) {
 		checkRelease(output);
-		if (step.type !== "release" && output.defer !== undefined) {
+		if (step.phase !== "release" && output.defer !== undefined) {
 			if (typeof output.defer !== "string" || output.defer.trim() === "") {
 				throw new TypeError(
 					"invalid output: 'defer' must be a non-empty string when present",
@@ -1035,7 +1035,7 @@ function apply(
 }
 
 function applyTo(step: AnyStep, state: State, output: Record<string, unknown>) {
-	switch (step.type) {
+	switch (step.phase) {
 		case "read-changes": {
 			const changes = parseChanges(output);
 			checkChanges(changes, step.provides ?? []);

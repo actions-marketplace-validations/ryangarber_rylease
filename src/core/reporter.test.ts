@@ -10,9 +10,9 @@ afterEach(() => {
 const env: Environment = { cwd: "/p", branch: "main", dryRun: false };
 
 const steps = [
-	{ type: "previous", name: "git/tags" },
-	{ type: "determine-kind", name: "kind" },
-	{ type: "release", name: "a" },
+	{ phase: "read-version", name: "git/tags" },
+	{ phase: "determine-kind", name: "kind" },
+	{ phase: "release", name: "a" },
 ] as const;
 
 const root = { name: "root", path: ".", dependsOn: [], pathspec: [] };
@@ -61,28 +61,28 @@ describe("prettyReporter", () => {
 		reporter.start?.(env, steps, [root]);
 		const records: StepRecord[] = [
 			{
-				type: "previous",
+				phase: "read-version",
 				name: "git/tags",
 				status: "ok",
 				durationMs: 4.2,
 				reason: "v1.0.0 at abc1234",
 			},
 			{
-				type: "determine-kind",
+				phase: "determine-kind",
 				name: "kind",
 				status: "ok",
 				durationMs: 0.3,
 				reason: "'feat' in title",
 			},
 			{
-				type: "release",
+				phase: "release",
 				name: "a",
 				status: "skipped",
 				durationMs: 0,
 				reason: "`dryRun` is false",
 			},
 			{
-				type: "release",
+				phase: "release",
 				name: "a",
 				status: "failed",
 				durationMs: 1234,
@@ -94,7 +94,7 @@ describe("prettyReporter", () => {
 			"",
 			"rylease release · main · /p",
 			"",
-			"  ✔ previous        git/tags      4ms  v1.0.0 at abc1234",
+			"  ✔ read-version    git/tags      4ms  v1.0.0 at abc1234",
 			"  ✔ determine-kind  kind         <1ms  'feat' in title",
 			"  ○ release         a               -  `dryRun` is false",
 			"  ✖ release         a           1.23s  boom",
@@ -149,7 +149,7 @@ describe("prettyReporter", () => {
 			{ ...root, name: "cli" },
 		]);
 		reporter.step?.({
-			type: "release",
+			phase: "release",
 			name: "a",
 			component: "cli",
 			status: "ok",
@@ -157,7 +157,7 @@ describe("prettyReporter", () => {
 			reason: "ran",
 		});
 		reporter.step?.({
-			type: "release",
+			phase: "release",
 			name: "a",
 			status: "ok",
 			durationMs: 2,

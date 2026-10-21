@@ -5,10 +5,10 @@ A release pipeline that doesn't fight you.
 Everything is a **step**: a small, named, strictly typed function that does one auditable thing and says why. Steps run in a fixed order of phases. Each one receives the environment, your own context, and the outputs of every step before it.
 
 ```
-previous → read-changes → determine-kind → version → build-notes → prepare → commit → release
+read-version → read-changes → determine-kind → determine-version → build-notes → write → stage → release
 ```
 
-rylease handles `previous` and `version` itself. It finds the previous release with the release's **history**, e.g. the nearest tag on HEAD, and works out the next version with its **scheme**, e.g. semver, on a **channel** if there is one, e.g. `2.0.0-next.1`. Both come from the preset, unless the release sets its own; there are no other defaults. No step parses or bumps a version; every step takes it as plain text. `prepare` steps change files, `commit` steps commit them (or propose them in a pull request), and `release` steps ship the result.
+rylease handles `read-version` and `determine-version` itself. It finds the previous release with the release's **history**, e.g. the nearest tag on HEAD, and works out the next version with its **scheme**, e.g. semver, on a **channel** if there is one, e.g. `2.0.0-next.1`. Both come from the preset, unless the release sets its own; there are no other defaults. No step parses or bumps a version; every step takes it as plain text. `write` steps change files, `stage` steps commit them (or propose them in a pull request), and `release` steps ship the result.
 
 Nothing assumes semver, npm or GitHub, and each of them is one line to add. Every step declares its options once, and they work the same in a config file as in TypeScript. Steps also declare what they **need** and **provide**, e.g. `labels/determine-kind` needs changes with labels. A release that can't work fails before anything runs, and the error says which step would fix it.
 
@@ -44,14 +44,14 @@ That runs the bundled `conventional` preset, which versions by semver and finds 
 ```
 rylease release · main · /home/runner/work/project/project
 
-  ✔ previous        git/tags                     4ms    v1.0.0 at 0d92bfa, nearest on HEAD
-  ✔ read-changes    conventional/read-commits    12ms   3 changes in 2 commits since 0d92bfa
-  ✔ determine-kind  conventional/determine-kind  <1ms   'feat' in title (commit 3a7a7e3)
-  ✔ version         semver                       <1ms   1.1.0: 'feature' from 1.0.0, bumps minor
-  ✔ build-notes     conventional/build-notes     <1ms   feature release; features: 1, bug fixes: 1, other: 1
-  ✔ release         git/create-tag               92ms   tagged v1.1.0 at 3a7a7e3 and pushed to origin
-  ✔ release         github/create-release        410ms  created release v1.1.0: https://github.com/me/project/releases/tag/v1.1.0
-  ✔ release         announce                     130ms  announced 1.1.0 in #releases
+  ✔ read-version       git/tags                     4ms    v1.0.0 at 0d92bfa, nearest on HEAD
+  ✔ read-changes       conventional/read-commits    12ms   3 changes in 2 commits since 0d92bfa
+  ✔ determine-kind     conventional/determine-kind  <1ms   'feat' in title (commit 3a7a7e3)
+  ✔ determine-version  semver                       <1ms   1.1.0: 'feature' from 1.0.0, bumps minor
+  ✔ build-notes        conventional/build-notes     <1ms   feature release; features: 1, bug fixes: 1, other: 1
+  ✔ release            git/create-tag               92ms   tagged v1.1.0 at 3a7a7e3 and pushed to origin
+  ✔ release            github/create-release        410ms  created release v1.1.0: https://github.com/me/project/releases/tag/v1.1.0
+  ✔ release            announce                     130ms  announced 1.1.0 in #releases
 
   1.0.0 → 1.1.0 (feature) · released
 ```
@@ -111,7 +111,7 @@ Outputs: `status` (`released`, `pending` when a [release pull request](#release-
 | `previousVersion`, `previousRef`, `previousTag`, `changes`, `kind`, `version`, `tag`, `notes`, `dependencies` | The release so far; a value is `null` until its phase has run. |
 | `component` | The component the step runs for: `component.name` and `component.path`. |
 | `components` | For steps that run once for all components: each one's values. |
-| `steps['<name>']` | Each step that ran before: its `type`, `status` (`ok` or `skipped`), `reason` and `output`. Names with a `/` need brackets, e.g. `steps['git/commit'].output`; others can also be read as `steps.announce`. |
+| `steps['<name>']` | Each step that ran before: its `phase`, `status` (`ok` or `skipped`), `reason` and `output`. Names with a `/` need brackets, e.g. `steps['git/commit'].output`; others can also be read as `steps.announce`. |
 
 Expressions are written like GitHub's: `'strings'` (`''` for a quote), numbers, `true`, `false` and `null`; `.name` and `['name']`; `!`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||` and parentheses; and `contains(text or list, value)`, `startsWith(text, prefix)` and `endsWith(text, suffix)`. Comparisons are exact, and case-sensitive. An `if` starting with `!` needs quotes in YAML.
 
@@ -181,22 +181,23 @@ It publishes the version that `fs/write-version` wrote, after the release is com
 | `maven` | `pom.xml` | The project's own `<version>`, not its parent's or its dependencies'. |
 | `pattern` | any | Wherever a template matches, e.g. `pattern: '__version__ = "{version}"'`, or `appVersion: "{version}"` in `Chart.yaml`. |
 
-`exec/prepare` and `exec/run` run any command, with `{placeholders}` filled in: `exec/prepare` before the release is committed, e.g. to update a lockfile, and `exec/run` to ship it. In a dry run they only say what they'd run, unless they're given a `dryRun` command to run instead.
+`exec/command` runs any command, with `{placeholders}` filled in, in the `phase` it's given: in `write`, e.g. to update a lockfile, and in `release` to ship it. In a dry run it only says what it'd run, unless it's given a `dryRun` command to run instead.
 
 ```yaml
 - uses: conventional
 - uses: fs/write-version
   with: { format: cargo }
-- uses: exec/prepare
-  with: { command: cargo update --workspace, files: [Cargo.lock] }
+- uses: exec/command
+  with: { phase: write, command: cargo update --workspace, files: [Cargo.lock] }
 - uses: git/commit
-- uses: exec/run
+- uses: exec/command
   with:
+    phase: release
     command: cargo publish
     dryRun: cargo publish --dry-run
     env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_TOKEN }}" }
-- uses: exec/run
-  with: { command: "docker buildx build --push -t ghcr.io/me/app:{version} ." }
+- uses: exec/command
+  with: { phase: release, command: "docker buildx build --push -t ghcr.io/me/app:{version} ." }
 ```
 
 ### Uploading builds to the release
@@ -243,9 +244,9 @@ Each phase has more than one way to fill it. Leave a preset's step out with `fal
 | `read-changes` | `conventional/read-commits` | `github/read-pull-requests`, `keep-a-changelog/read-unreleased`, `change-files/read` |
 | `determine-kind` | `conventional/determine-kind` | `labels/determine-kind`, `components/dependents` |
 | `build-notes` | `conventional/build-notes` | `labels/build-notes` |
-| `prepare` | | `fs/write-version`, `fs/write-changes`, `keep-a-changelog/write-release`, `change-files/clean`, `exec/prepare` |
-| `commit` | | `git/commit`, `github/open-release-pr` |
-| `release` | `git/create-tag`, `github/create-release` | `gitlab/create-release`, `npm/publish`, `exec/run`, `github/upload-release-assets`, … |
+| `write` | | `fs/write-version`, `fs/write-changes`, `keep-a-changelog/write-release`, `change-files/clean`, `exec/command` |
+| `stage` | | `git/commit`, `github/open-release-pr` |
+| `release` | `git/create-tag`, `github/create-release` | `gitlab/create-release`, `npm/publish`, `exec/command`, `github/upload-release-assets`, … |
 
 Steps of neighboring phases work together as long as one provides what the other needs. The `labels/` steps need labels, which pull requests, Keep a Changelog sections and change files provide. The `conventional/` ones read conventional titles, from any source. Commits have no labels, so `labels/determine-kind` after `conventional/read-commits` fails before anything runs:
 
@@ -381,7 +382,7 @@ Instead of releasing on every push, rylease can propose the release in a pull re
           with: { format: npm }
 ```
 
-On a push, `github/open-release-pr` commits what the `prepare` steps changed to `rylease/main`, and opens a pull request for it, or updates the open one. Its body holds each release's notes. The run is `pending`, and nothing is tagged. When the pull request is merged, the next run finds it through `conventional-pr`'s history, `github/release-pr`: only the `release` steps run, for the versions and notes it proposed. The job needs `pull-requests: write` as well as `contents: write`.
+On a push, `github/open-release-pr` commits what the `write` steps changed to `rylease/main`, and opens a pull request for it, or updates the open one. Its body holds each release's notes. The run is `pending`, and nothing is tagged. When the pull request is merged, the next run finds it through `conventional-pr`'s history, `github/release-pr`: only the `release` steps run, for the versions and notes it proposed. The job needs `pull-requests: write` as well as `contents: write`.
 
 ### Monorepos
 
@@ -402,22 +403,22 @@ A release has one or more **components**: what's versioned and released together
 ```
 
 ```
-  ✔ @x/core  previous        git/tags                     6ms  @x/core@1.0.0 at 0d92bfa, nearest on HEAD
-  ✔ @x/cli   previous        git/tags                     5ms  @x/cli@1.0.0 at 0d92bfa, nearest on HEAD
-  ✔ @x/core  read-changes    conventional/read-commits    9ms  1 change in 1 commit since 0d92bfa
-  ✔ @x/cli   read-changes    conventional/read-commits    8ms  0 changes in 0 commits since 0d92bfa
+  ✔ @x/core  read-version       git/tags                     6ms  @x/core@1.0.0 at 0d92bfa, nearest on HEAD
+  ✔ @x/cli   read-version       git/tags                     5ms  @x/cli@1.0.0 at 0d92bfa, nearest on HEAD
+  ✔ @x/core  read-changes       conventional/read-commits    9ms  1 change in 1 commit since 0d92bfa
+  ✔ @x/cli   read-changes       conventional/read-commits    8ms  0 changes in 0 commits since 0d92bfa
   …
-  ✔ *        determine-kind  components/dependents       <1ms  1 dependent released: @x/cli
-  ✔ @x/core  version         semver                      <1ms  1.1.0: 'feature' from 1.0.0, bumps minor
-  ✔ @x/cli   version         semver                      <1ms  1.0.1: 'fix' from 1.0.0, bumps patch
+  ✔ *        determine-kind     components/dependents       <1ms  1 dependent released: @x/cli
+  ✔ @x/core  determine-version  semver                      <1ms  1.1.0: 'feature' from 1.0.0, bumps minor
+  ✔ @x/cli   determine-version  semver                      <1ms  1.0.1: 'fix' from 1.0.0, bumps patch
   …
-  ✔ *        prepare         fs/write-version             3ms  wrote 1.1.0 to packages/core/package.json and 1.0.1 to packages/cli/package.json (and @x/core@^1.1.0)
-  ✔ @x/core  prepare         fs/write-changes             1ms  created packages/core/CHANGELOG.md
-  ✔ @x/cli   prepare         fs/write-changes             1ms  created packages/cli/CHANGELOG.md
-  ✔ *        commit          git/commit                  40ms  committed 5e1f00d
-  ✔ *        release         git/create-tag              90ms  tagged @x/core@1.1.0 and @x/cli@1.0.1 at 5e1f00d and pushed to origin
-  ✔ @x/core  release         npm/publish                1.20s  published @x/core@1.1.0 to https://registry.npmjs.org/ as latest
-  ✔ @x/cli   release         npm/publish                1.10s  published @x/cli@1.0.1 to https://registry.npmjs.org/ as latest
+  ✔ *        write              fs/write-version             3ms  wrote 1.1.0 to packages/core/package.json and 1.0.1 to packages/cli/package.json (and @x/core@^1.1.0)
+  ✔ @x/core  write              fs/write-changes             1ms  created packages/core/CHANGELOG.md
+  ✔ @x/cli   write              fs/write-changes             1ms  created packages/cli/CHANGELOG.md
+  ✔ *        stage              git/commit                  40ms  committed 5e1f00d
+  ✔ *        release            git/create-tag              90ms  tagged @x/core@1.1.0 and @x/cli@1.0.1 at 5e1f00d and pushed to origin
+  ✔ @x/core  release            npm/publish                1.20s  published @x/core@1.1.0 to https://registry.npmjs.org/ as latest
+  ✔ @x/cli   release            npm/publish                1.10s  published @x/cli@1.0.1 to https://registry.npmjs.org/ as latest
 ```
 
 The pipeline is the same as for one package. What changes is what each step runs for:
@@ -496,18 +497,18 @@ Export the release as the default export of `rylease.config.ts` instead, and the
 | `read-changes` | `changes?` | `{ changes: { title?, description?, reason, link?, labels? }[], reason }` |
 | `determine-kind` | … `changes`, `kind?` | `{ kind: "breaking" \| "feature" \| "fix" \| "none", version?, reason }` |
 | `build-notes` | … `kind` (never `"none"`), `version`, `tag`, `placeholders`, `dependencies`, `notes?` | `{ notes, reason }` |
-| `prepare`, `commit` | … `notes`, `releases` (results of earlier `prepare`, `commit` and `release` steps) | `{ output, files?, defer?, reason }` |
+| `write`, `stage` | … `notes`, `releases` (results of earlier `write`, `stage` and `release` steps) | `{ output, files?, defer?, reason }` |
 | `release` | … `notes`, `releases` | `{ output, files?, reason }` |
 
-- **Order.** Steps are sorted by type. Steps of the same type keep the order you gave them.
-- **Chaining.** When several steps share a type, each later one receives the current value as an optional input (e.g. `notes?`). Whatever it returns replaces that value. `prepare`, `commit` and `release` outputs accumulate instead.
-- **One source of truth.** A step takes what it needs from earlier phases and never works it out again. `previousRef` is the commit of the previous release, and changes are collected from there. `tag` is the release's tag, and `placeholders` fill templates. `files` lists what a `prepare` step changed, and `git/commit` commits exactly those.
-- **Scope.** A step runs once per component (`scope: "each"`, the default) or once for all of them (`scope: "all"`). Then it receives `components`, each with what it would receive on its own, and returns `results` by component name, or from `prepare` on, one result for all.
+- **Order.** Steps are sorted by phase. Steps of the same phase keep the order you gave them.
+- **Chaining.** When several steps share a phase, each later one receives the current value as an optional input (e.g. `notes?`). Whatever it returns replaces that value. `write`, `stage` and `release` outputs accumulate instead.
+- **One source of truth.** A step takes what it needs from earlier phases and never works it out again. `previousRef` is the commit of the previous release, and changes are collected from there. `tag` is the release's tag, and `placeholders` fill templates. `files` lists what a `write` step changed, and `git/commit` commits exactly those.
+- **Scope.** A step runs once per component (`scope: "each"`, the default) or once for all of them (`scope: "all"`). Then it receives `components`, each with what it would receive on its own, and returns `results` by component name, or from `write` on, one result for all.
 - **Facts.** A step declares the facts it `needs` and `provides`, e.g. `changes.labels`: every change has labels. Before anything runs, each need must be met by an earlier step, or for `version.semver`, by the scheme. Provided facts are checked on the step's output. Facts about changes last only until another step replaces the changes. `needs` can also be a function of the step's options, e.g. by format.
-- **Deferring.** A `prepare` or `commit` step that returns `defer` leaves the release to later: the `release` steps are skipped with that reason, and the run is `pending`.
+- **Deferring.** A `write` or `stage` step that returns `defer` leaves the release to later: the `release` steps are skipped with that reason, and the run is `pending`.
 - **Nothing to release.** A component whose final kind is `"none"` drops out; if none are left, the remaining steps are skipped.
 - **Dry run.** Steps get `env.dryRun`. Steps with side effects must do nothing and explain what they *would* have done. The one exception is `dryRunArtifact`, which keeps files as an artifact of the workflow run, which only that run sees.
-- **Audit.** `run()` resolves to a report with a record (type, name, component, status, duration, reason, output) for every step, and for the previous and next versions. On failure it rejects with a `ReleaseError` whose `.report` holds the same records.
+- **Audit.** `run()` resolves to a report with a record (phase, name, component, status, duration, reason, output) for every step, and for the previous and next versions. On failure it rejects with a `ReleaseError` whose `.report` holds the same records.
 
 ### Custom steps
 
@@ -518,7 +519,7 @@ Export the release as the default export of `rylease.config.ts` instead, and the
 import { defineStep, z } from "rylease";
 
 export default defineStep({
-	type: "release",
+	phase: "release",
 	name: "announce",
 	description: "Posts the release to Slack.",
 	options: {
@@ -537,7 +538,7 @@ export default defineStep({
 
 ```ts
 export const byJira = defineStep({
-	type: "determine-kind",
+	phase: "determine-kind",
 	name: "jira/determine-kind",
 	needs: ["changes.labels"],
 	run: ({ changes }) => ({
@@ -554,7 +555,7 @@ Steps that run git can use `git(env.cwd, ...args)`, which resolves with its trim
 
 `definePreset({ name, steps })` bundles factories, like `presets.conventional`, and takes options per step by name. It can also give the `scheme` and `history` of releases made with it, as factories, e.g. `history: sources.gitTags`; a release's own wins, and two presets that both give one are an error. `defineHistory` and `defineComponents` define where previous releases and components come from, the same way.
 
-Steps given inline to `defineRelease` are plain `{ type, name, run }` objects, typed from their `type` and `scope`.
+Steps given inline to `defineRelease` are plain `{ phase, name, run }` objects, typed from their `phase` and `scope`.
 
 ### Context
 
@@ -566,7 +567,7 @@ defineRelease<{ slackTs?: string }>({
 	steps: [
 		...presets.conventional(),
 		{
-			type: "release",
+			phase: "release",
 			name: "announce",
 			run: async ({ version, context, env }) => {
 				if (env.dryRun) return { output: null, reason: "would announce" };
@@ -589,7 +590,7 @@ defineRelease<{ slackTs?: string }>({
 | `version/calver` | `scheme: { uses: calver, with: { format: … } }`. |
 | Kinds `major`, `minor`, `patch` | `breaking`, `feature`, `fix`, in options (`types: { docs: none, "chore(deps)": fix }`), conditions and outputs. |
 | `tag` options of `git/create-tag`, `github/create-release`, `gitlab/create-release`, `github/upload-release-assets`, `keep-a-changelog/write-release` | The release's `tag`, set once. Templates get `{tag}`; `git/commit`'s message is `chore(release): {tags}`. |
-| Listing steps that write files before a preset | Not needed: `fs/write-*` steps are `prepare` steps and `git/commit` a `commit` step, so they run in order wherever they're listed. Custom steps that change files should be `prepare` steps. |
+| Listing steps that write files before a preset | Not needed: `fs/write-*` steps are `write` steps and `git/commit` a `stage` step, so they run in order wherever they're listed. Custom steps that change files should be `write` steps. |
 | `working-directory` per package | `components: npm/workspaces`, in one run. |
 | Steps of type `read-version` or `bump-version` | A history (`defineHistory`) or scheme (`defineScheme`). |
 
@@ -660,7 +661,7 @@ Creates a GitHub release of the tag with the notes, unless it already has one; t
 
 These aren't in `conventional`; list them with it, or in its place: see [Other sources and schemes](#other-sources-and-schemes). Steps run by phase, so they can be listed in any order; steps of the same phase run in the order given.
 
-#### `change-files/clean` · `prepare`
+#### `change-files/clean` · `write`
 
 Deletes the change files of the components being released, for `git/commit` to commit; releases on a channel leave them for the stable release. Runs once for all components.
 
@@ -686,30 +687,20 @@ Releases each component that depends on a released one, as at least a `fix`; lis
 | `kind` | `breaking \| feature \| fix` | `fix` | The least kind of a dependent's release. |
 | `on` | `breaking \| feature \| fix[]` | `[breaking, feature, fix]` | The kinds of a dependency's release that release its dependents. |
 
-#### `exec/prepare` · `prepare`
+#### `exec/command` · `write | stage | release`
 
-Runs a command for each component before the release is committed, e.g. to update a lockfile; `files` lists what it changes.
+Runs a command for each component in its `phase`: `write` e.g. to update a lockfile, listing what it changes as `files`, or `release` e.g. `cargo publish` or `docker push app:{version}`.
 
 | Option | Type | Default | |
 |---|---|---|---|
+| `phase` | `write \| stage \| release` | required | The phase it runs in. |
 | `command` | `string \| string[]` | required | `{placeholders}` are filled in. Text runs in `sh -c`; a list runs as it is, without a shell. |
 | `dryRun` | `string \| string[]` |  | Runs instead in a dry run, e.g. `cargo publish --dry-run`; without it, a dry run only says what it would run. |
 | `cwd` | `string` | `.` | Where it runs, relative to the component's directory. |
 | `env` | `{ [key]: string }` | `{}` | More environment variables, with `{placeholders}` filled in. |
 | `files` | `string[]` | `[]` | What it changes, relative to the component's directory, for `git/commit`. |
 
-#### `exec/run` · `release`
-
-Runs a command for each component, with `{placeholders}` filled in, e.g. `cargo publish` or `docker push app:{version}`.
-
-| Option | Type | Default | |
-|---|---|---|---|
-| `command` | `string \| string[]` | required | `{placeholders}` are filled in. Text runs in `sh -c`; a list runs as it is, without a shell. |
-| `dryRun` | `string \| string[]` |  | Runs instead in a dry run, e.g. `cargo publish --dry-run`; without it, a dry run only says what it would run. |
-| `cwd` | `string` | `.` | Where it runs, relative to the component's directory. |
-| `env` | `{ [key]: string }` | `{}` | More environment variables, with `{placeholders}` filled in. |
-
-#### `fs/write-changes` · `prepare`
+#### `fs/write-changes` · `write`
 
 Writes a heading and the notes to a file.
 
@@ -720,7 +711,7 @@ Writes a heading and the notes to a file.
 | `mode` | `prepend \| append \| replace` | `prepend` |  |
 | `channels` | `boolean` | `false` | Also run for releases on a channel, e.g. prereleases; by default only stable releases do. |
 
-#### `fs/write-version` · `prepare`
+#### `fs/write-version` · `write`
 
 Writes each component's new version to its version file: `VERSION`, `package.json`, `Cargo.toml`, `pyproject.toml`, `Chart.yaml`, `gradle.properties`, `pom.xml`, or any file by pattern. With `npm` and `cargo`, it also updates dependencies on the other components released with it, and needs `version.semver`. Runs once for all components.
 
@@ -730,7 +721,7 @@ Writes each component's new version to its version file: `VERSION`, `package.jso
 | `path` | `string \| string[]` |  | Relative to each component's directory; globs, or a list, write several, e.g. `packages/*/package.json` for packages sharing a version. Defaults to the format's file. |
 | `pattern` | `string` |  | With the `pattern` format, where the version is, e.g. `__version__ = "{version}"`. |
 
-#### `git/commit` · `commit`
+#### `git/commit` · `stage`
 
 Commits the files earlier release steps changed, for every component, in one commit. Runs once for all components.
 
@@ -740,9 +731,9 @@ Commits the files earlier release steps changed, for every component, in one com
 | `message` | `string` | `chore(release): {tags}` | The commit message; `{tags}` is filled in with every release's tag, and with one component, its placeholders too, e.g. `{version}`. |
 | `push` | `string \| false` | `false` | The remote to push the branch to; `false` leaves it to a later step, e.g. `git/create-tag`, so the commit and tag land together. |
 
-#### `github/open-release-pr` · `commit`
+#### `github/open-release-pr` · `stage`
 
-Commits the prepared release to a branch and opens a pull request for it, or updates the open one; the release waits until it merges. Use with the `github/release-pr` history. List it after other `prepare` steps, in place of `git/commit`. Runs once for all components.
+Commits the prepared release to a branch and opens a pull request for it, or updates the open one; the release waits until it merges. Use with the `github/release-pr` history. List it after the `write` steps, in place of `git/commit`. Runs once for all components.
 
 | Option | Type | Default | |
 |---|---|---|---|
@@ -807,7 +798,7 @@ Collects each entry under `## [Unreleased]` in a Keep a Changelog file, labeled 
 |---|---|---|---|
 | `path` | `string` | `CHANGELOG.md` | Relative to the component's directory. |
 
-#### `keep-a-changelog/write-release` · `prepare`
+#### `keep-a-changelog/write-release` · `write`
 
 Moves the entries under `## [Unreleased]` to a heading for the version, and updates the compare links, if there are any.
 

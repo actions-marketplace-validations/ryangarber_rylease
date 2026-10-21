@@ -11,7 +11,7 @@ import { directoryOption, kindFor, readChangeFiles } from "./files.ts";
  * deletion. Releases on a channel leave them for the stable release.
  */
 export const changeFilesClean = defineStep({
-	type: "prepare",
+	phase: "write",
 	name: "change-files/clean",
 	scope: "all",
 	description:

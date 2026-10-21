@@ -55,14 +55,14 @@ describe("conventional", () => {
 		}).run({ cwd: repo.cwd, reporter: null });
 
 		expect(
-			report.records.map((r) => `${r.type} ${r.name}: ${r.reason}`),
+			report.records.map((r) => `${r.phase} ${r.name}: ${r.reason}`),
 		).toEqual([
-			`previous git/tags: v1.0.0 at ${tagged.slice(0, 7)}, nearest on HEAD`,
+			`read-version git/tags: v1.0.0 at ${tagged.slice(0, 7)}, nearest on HEAD`,
 			`read-changes conventional/read-commits: 3 changes in 3 commits since ${tagged.slice(0, 7)}`,
 			expect.stringMatching(
 				/^determine-kind conventional\/determine-kind: 'fix\(x\)!' in title/,
 			),
-			"version semver: 2.0.0: 'breaking' from 1.0.0, bumps major",
+			"determine-version semver: 2.0.0: 'breaking' from 1.0.0, bumps major",
 			"build-notes conventional/build-notes: breaking release; breaking changes: 1, features: 2",
 			`release git/create-tag: tagged v2.0.0 at ${head.slice(0, 7)} and pushed to origin`,
 		]);
@@ -313,7 +313,7 @@ describe("conventional, in a monorepo", () => {
 		]);
 		expect(
 			report.records
-				.filter((r) => ["prepare", "commit", "release"].includes(r.type))
+				.filter((r) => ["write", "stage", "release"].includes(r.phase))
 				.map((r) => `${r.component ?? "*"} ${r.name}: ${r.reason}`),
 		).toEqual([
 			"* fs/write-version: wrote 1.1.0 to packages/core/package.json and 1.0.1 to packages/cli/package.json (and @x/core@^1.1.0)",

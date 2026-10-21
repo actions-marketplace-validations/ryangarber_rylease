@@ -14,7 +14,7 @@ beforeAll(async () => {
 		`import { defineStep, definePreset, z } from ${rylease};
 
 export const announce = defineStep({
-	type: "release",
+	phase: "release",
 	name: "announce",
 	options: { channel: z.string() },
 	run: ({ options }) => ({ output: options.channel, reason: "announced" }),
@@ -38,10 +38,10 @@ export const notAStep = () => {};
 		join(pkg, "index.js"),
 		`const factory = (name) =>
 	Object.defineProperties(
-		() => ({ type: "release", name, run: () => ({ output: null, reason: name }) }),
+		() => ({ phase: "release", name, run: () => ({ output: null, reason: name }) }),
 		{
 			kind: { value: "step" },
-			type: { value: "release" },
+			phase: { value: "release" },
 			name: { value: name },
 			options: { value: {} },
 		},

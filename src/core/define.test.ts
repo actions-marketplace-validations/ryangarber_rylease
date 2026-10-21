@@ -6,7 +6,7 @@ import { z } from "./options.ts";
 import type { EachStepDefinition, Step, StepInput } from "./types.ts";
 
 const greet = defineStep({
-	type: "build-notes",
+	phase: "build-notes",
 	name: "greet",
 	description: "Greets.",
 	options: {
@@ -22,7 +22,7 @@ const greet = defineStep({
 });
 
 const shout = defineStep({
-	type: "build-notes",
+	phase: "build-notes",
 	name: "shout",
 	run: ({ notes }) => ({
 		notes: (notes ?? "").toUpperCase(),
@@ -47,14 +47,14 @@ const input = {
 
 describe("defineStep", () => {
 	it("creates configured steps and exposes its definition", async () => {
-		expect([greet.type, greet.name, greet.description]).toEqual([
+		expect([greet.phase, greet.name, greet.description]).toEqual([
 			"build-notes",
 			"greet",
 			"Greets.",
 		]);
 		expect(Object.keys(greet.options)).toEqual(["greeting", "loud"]);
 		const step = greet({ greeting: "hello" });
-		expect(step).toMatchObject({ type: "build-notes", name: "greet" });
+		expect(step).toMatchObject({ phase: "build-notes", name: "greet" });
 		expect(greet.kind).toBe("step");
 		expect(greet.scope).toBe("each");
 		expect(step.if).toBeUndefined();
@@ -75,7 +75,7 @@ describe("defineStep", () => {
 
 	it("declares its scope, needs and provides", () => {
 		const count = defineStep({
-			type: "release",
+			phase: "release",
 			name: "count",
 			scope: "all",
 			needs: ["changes.labels"],
@@ -95,7 +95,7 @@ describe("defineStep", () => {
 			needs: ["changes.labels"],
 			provides: ["version.semver"],
 		});
-		expect(Object.keys(greet())).toEqual(["type", "name", "run"]);
+		expect(Object.keys(greet())).toEqual(["phase", "name", "run"]);
 	});
 
 	it("validates options when called", () => {
@@ -231,7 +231,7 @@ describe("defineRelease", () => {
 	it("keeps its steps and runs them", async () => {
 		const steps = [
 			{
-				type: "read-changes" as const,
+				phase: "read-changes" as const,
 				name: "fixed",
 				run: () => ({ changes: [], reason: "fixed" }),
 			},

@@ -14,7 +14,7 @@ import { FORMAT_NAMES, versionFormat } from "./formats.ts";
  * pointed at their new versions too, keeping each range's operator.
  */
 export const fsWriteVersion = defineStep({
-	type: "prepare",
+	phase: "write",
 	name: "fs/write-version",
 	scope: "all",
 	description:
