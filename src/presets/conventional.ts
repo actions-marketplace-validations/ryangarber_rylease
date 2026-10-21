@@ -1,35 +1,32 @@
-import { definePreset } from "../define.ts";
+import { definePreset } from "../core/define.ts";
+import { gitTags } from "../histories/index.ts";
+import { semver } from "../schemes/index.ts";
 import {
-	conventionalCommits,
-	conventionalKind,
-	conventionalNotes,
-	gitCommit,
-	githubRelease,
-	prependChangelog,
-	readGitTag,
-	readPackageJson,
-	semver,
-	writePackageJson,
+	conventionalBuildNotes,
+	conventionalDetermineKind,
+	conventionalReadCommits,
+	gitCreateTag,
+	githubCreateRelease,
 } from "../steps/index.ts";
 
 /**
- * package.json version and tag → conventional commits → semver →
- * package.json, CHANGELOG.md, git commit and tag → GitHub release.
+ * Conventional commits since the previous release → git tag → GitHub
+ * release, versioned by semver and found by its tags. Nothing specific to a
+ * language or ecosystem; add steps like `fs/write-version`,
+ * `fs/write-changes` and `git/commit` for that. The tag is pushed, with the
+ * branch, to `origin`.
  */
 export const conventional = definePreset({
 	name: "conventional",
-	description:
-		"Conventional commits → semver → package.json, CHANGELOG.md, git tag and GitHub release.",
+	description: "Conventional commits → notes → git tag and GitHub release.",
 	steps: [
-		readPackageJson,
-		readGitTag,
-		conventionalCommits,
-		conventionalKind,
-		semver,
-		conventionalNotes,
-		writePackageJson,
-		prependChangelog,
-		gitCommit,
-		githubRelease,
+		conventionalReadCommits,
+		conventionalDetermineKind,
+		conventionalBuildNotes,
+		gitCreateTag,
+		githubCreateRelease,
 	],
+	defaults: { "git/create-tag": { push: "origin" } },
+	scheme: semver,
+	history: gitTags,
 });

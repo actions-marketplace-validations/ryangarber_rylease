@@ -1,11 +1,15 @@
 /**
  * Generates the options reference of the bundled steps in README.md from their
- * definitions. Run with `pnpm gen:docs`; `--check` fails if README.md is stale.
+ * definitions. Run with `pnpm build:docs`; `--check` fails if README.md is stale.
  */
 import { readFile, writeFile } from "node:fs/promises";
-import type { AnyStepFactory } from "../src/define.ts";
-import { z } from "../src/options.ts";
+import * as components from "../src/components/index.ts";
+import type { AnyStepFactory } from "../src/core/define.ts";
+import { type AnyFactory, isFactory } from "../src/core/factory.ts";
+import { z } from "../src/core/options.ts";
+import * as histories from "../src/histories/index.ts";
 import { conventional } from "../src/presets/index.ts";
+import * as schemes from "../src/schemes/index.ts";
 import * as steps from "../src/steps/index.ts";
 
 interface Schema {
@@ -62,20 +66,27 @@ function reference(): string {
 	const others = Object.values(steps).filter(
 		(step) => !conventional.steps.some((other) => other.name === step.name),
 	);
-	const section = (step: AnyStepFactory) => {
+	const presetDefaults: Record<string, Record<string, unknown> | undefined> =
+		conventional.defaults;
+	const section = (step: AnyFactory) => {
 		const schema = z.toJSONSchema(z.object(step.options), {
 			io: "input",
 		}) as Schema;
 		const options = Object.entries(schema.properties ?? {});
-		const heading = `#### \`${step.name}\` · \`${step.type}\`\n\n${step.description ?? ""}`;
+		const heading = `#### \`${step.name}\` · \`${isStep(step) ? step.type : step.kind}\`\n\n${[step.description ?? "", ...(isStep(step) ? contract(step) : [])].join(" ")}`;
 		if (options.length === 0) return `${heading}\n\nNo options.`;
+		const preset = presetDefaults[step.name] ?? {};
 		const rows = options.map(([name, option]) => {
-			const fallback =
+			const own =
 				option.default !== undefined
 					? `\`${flow(option.default)}\``
 					: schema.required?.includes(name)
 						? "required"
 						: "";
+			const fallback =
+				name in preset
+					? `\`${flow(preset[name])}\` in \`conventional\`, ${own || "none"} on its own`
+					: own;
 			return `| \`${name}\` | \`${typeOf(option)}\` | ${fallback} | ${option.description ?? ""} |`;
 		});
 		return [
@@ -88,10 +99,35 @@ function reference(): string {
 	};
 	const sections = [
 		...conventional.steps.map(section),
-		"### More steps\n\nThese aren't in `conventional`; list them after it.",
+		"### More steps\n\nThese aren't in `conventional`; list them with it, or in its place: see [Other sources and schemes](#other-sources-and-schemes). Steps run by phase, so they can be listed in any order; steps of the same phase run in the order given.",
 		...others.map(section),
+		"### Bundled schemes\n\nSet one as the release's `scheme`; see [Schemes](#schemes).",
+		...factories(schemes).map(section),
+		"### Bundled sources\n\nWhere previous releases are found, set as `history`, and what's released, set as `components`.",
+		...factories(histories).map(section),
+		"### Bundled components\n\nWhere components are found, set as `components`.",
+		...factories(components).map(section),
 	];
 	return `${START}\n${sections.join("\n\n")}\n${END}`;
+}
+
+function isStep(factory: AnyFactory): factory is AnyStepFactory {
+	return factory.kind === "step";
+}
+
+function factories(module: object): AnyFactory[] {
+	return (Object.values(module) as unknown[]).filter((item) => isFactory(item));
+}
+
+/** How a step runs, and its facts, e.g. `Runs once for all components.` */
+function contract(step: AnyStepFactory): string[] {
+	const list = (facts: readonly string[]) =>
+		facts.map((fact) => `\`${fact}\``).join(", ");
+	return [
+		...(step.scope === "all" ? ["Runs once for all components."] : []),
+		...(step.needs.length > 0 ? [`Needs ${list(step.needs)}.`] : []),
+		...(step.provides.length > 0 ? [`Provides ${list(step.provides)}.`] : []),
+	];
 }
 
 const readme = await readFile(README, "utf8");
@@ -103,7 +139,7 @@ const updated =
 
 if (process.argv.includes("--check")) {
 	if (updated !== readme) {
-		console.error("README.md is out of date; run `pnpm gen:docs`");
+		console.error("README.md is out of date; run `pnpm build:docs`");
 		process.exitCode = 1;
 	}
 } else {

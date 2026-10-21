@@ -1,5 +1,22 @@
-import { glob, readdir, stat } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { glob, readdir, readFile, stat } from "node:fs/promises";
+import { isAbsolute, join, posix, resolve } from "node:path";
+
+/**
+ * A path relative to a component's directory: where it is, and how it's
+ * written relative to the project, e.g. in `files` and reasons.
+ */
+export function inComponent(
+	env: { cwd: string },
+	component: { path: string },
+	path: string,
+): { file: string; relative: string } {
+	return {
+		file: resolve(env.cwd, component.path, path),
+		relative: posix.normalize(
+			posix.join(component.path, path.replaceAll("\\", "/")),
+		),
+	};
+}
 
 /**
  * Resolves globs, relative to `cwd` unless absolute, to the absolute paths of
@@ -17,9 +34,12 @@ export async function resolveFiles(
 		const normalized = pattern.replaceAll("\\", "/");
 		let matched = false;
 		for await (const match of glob(normalized, { cwd })) {
-			matched = true;
 			const path = isAbsolute(match) ? match : resolve(cwd, match);
-			for (const file of await filesIn(path)) files.add(file);
+			// An empty directory matches no files.
+			for (const file of await filesIn(path)) {
+				files.add(file);
+				matched = true;
+			}
 		}
 		if (!matched) throw new Error(`no files match '${pattern}'`);
 	}
@@ -44,4 +64,8 @@ export function formatSize(bytes: number): string {
 		unit++;
 	}
 	return `${unit === 0 ? size : size.toFixed(1)} ${units[unit]}`;
+}
+
+export async function loadJson(path: string): Promise<Record<string, unknown>> {
+	return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
 }
