@@ -51,7 +51,7 @@ jobs:
           import { join } from "node:path";
           import { defineStep, z } from "rylease";
           export default defineStep({
-            type: "release",
+            phase: "release",
             name: "hello",
             options: { to: z.string() },
             run: ({ env, version, options }) => {

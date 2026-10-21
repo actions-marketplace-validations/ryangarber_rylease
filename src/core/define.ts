@@ -231,6 +231,11 @@ export function defineStep<
 	const declared = definition.needs ?? [];
 	const needs: readonly Fact[] = typeof declared === "function" ? [] : declared;
 	const provides: readonly Fact[] = definition.provides ?? [];
+	for (const key of ["phase", "name"]) {
+		if (!(key in definition)) {
+			throw new OptionsError([`${definition.name}: ${key} is required`]);
+		}
+	}
 	registerProvider(definition.name, provides);
 	const factory = (options?: unknown) => {
 		const parsed = parseOptions(shape, options, definition.name);
