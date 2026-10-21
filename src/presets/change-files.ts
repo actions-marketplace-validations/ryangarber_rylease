@@ -41,7 +41,7 @@ export const changeFiles = definePreset({
 				none: "none",
 			},
 		},
-		"labels/build-notes": {
+		"labels/determine-notes": {
 			sections: [
 				{ title: "Breaking Changes", labels: ["breaking"] },
 				{ title: "Features", labels: ["feature"] },

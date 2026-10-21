@@ -6,7 +6,7 @@ import { z } from "./options.ts";
 import type { EachStepDefinition, Step, StepInput } from "./types.ts";
 
 const greet = defineStep({
-	phase: "build-notes",
+	phase: "determine-notes",
 	name: "greet",
 	description: "Greets.",
 	options: {
@@ -22,7 +22,7 @@ const greet = defineStep({
 });
 
 const shout = defineStep({
-	phase: "build-notes",
+	phase: "determine-notes",
 	name: "shout",
 	run: ({ notes }) => ({
 		notes: (notes ?? "").toUpperCase(),
@@ -43,18 +43,18 @@ const input = {
 	env: { cwd: "/", branch: "main", dryRun: false },
 	context: undefined,
 	history: [],
-} satisfies StepInput<"build-notes">;
+} satisfies StepInput<"determine-notes">;
 
 describe("defineStep", () => {
 	it("creates configured steps and exposes its definition", async () => {
 		expect([greet.phase, greet.name, greet.description]).toEqual([
-			"build-notes",
+			"determine-notes",
 			"greet",
 			"Greets.",
 		]);
 		expect(Object.keys(greet.options)).toEqual(["greeting", "loud"]);
 		const step = greet({ greeting: "hello" });
-		expect(step).toMatchObject({ phase: "build-notes", name: "greet" });
+		expect(step).toMatchObject({ phase: "determine-notes", name: "greet" });
 		expect(greet.kind).toBe("step");
 		expect(greet.scope).toBe("each");
 		expect(step.if).toBeUndefined();
@@ -116,7 +116,7 @@ describe("definePreset", () => {
 	const notesOf = async (steps: Step[]) => {
 		let notes = input.notes;
 		for (const step of steps) {
-			const run = step.run as EachStepDefinition<"build-notes">["run"];
+			const run = step.run as EachStepDefinition<"determine-notes">["run"];
 			notes = (await run({ ...input, notes })).notes;
 		}
 		return notes;
@@ -160,9 +160,12 @@ describe("when", () => {
 	it("makes a step conditional, describing the condition", () => {
 		const step = when(
 			greet(),
-			Object.assign(({ version }: StepInput<"build-notes">) => version > "1", {
-				source: "version > '1'",
-			}),
+			Object.assign(
+				({ version }: StepInput<"determine-notes">) => version > "1",
+				{
+					source: "version > '1'",
+				},
+			),
 		);
 		expect(step.if?.source).toBe("version > '1'");
 		expect(step.if?.(ready("2.0.0"))).toBe(true);
@@ -240,6 +243,6 @@ describe("defineRelease", () => {
 		expect(release.steps).toBe(steps);
 		await expect(
 			release.run({ cwd: "/", branch: "main", reporter: null }),
-		).rejects.toThrow("no step provided for: determine-kind, build-notes");
+		).rejects.toThrow("no step provided for: determine-kind, determine-notes");
 	});
 });

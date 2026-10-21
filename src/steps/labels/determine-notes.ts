@@ -13,8 +13,8 @@ import { hasLabel } from "./labels.ts";
  * categories, then the rest.
  */
 export const labelsBuildNotes = defineStep({
-	phase: "build-notes",
-	name: "labels/build-notes",
+	phase: "determine-notes",
+	name: "labels/determine-notes",
 	description:
 		"A `### Title` section per group of labels, e.g. `### Bug Fixes` for `bug`, then `### Other` for everything else.",
 	needs: ["changes.labels"],

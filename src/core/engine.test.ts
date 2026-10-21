@@ -42,7 +42,7 @@ function basics(kind: Kind = "feature"): Step[] {
 			run: () => ({ kind, reason: `always ${kind}` }),
 		},
 		{
-			phase: "build-notes",
+			phase: "determine-notes",
 			name: "fixed",
 			run: () => ({ notes: "notes", reason: "hardcoded" }),
 		},
@@ -61,7 +61,7 @@ const release = (
 describe("runRelease", () => {
 	it("runs steps by phase, chaining outputs of the same phase", async () => {
 		const header = defineStep({
-			phase: "build-notes",
+			phase: "determine-notes",
 			name: "header",
 			run: ({ tag, notes }) => ({
 				notes: `# ${tag}\n\n${notes}`,
@@ -92,8 +92,8 @@ describe("runRelease", () => {
 			"read-changes:fixed: 1 change",
 			"determine-kind:fixed: always feature",
 			"determine-version:semver: 1.1.0: 'feature' from 1.0.0, bumps minor",
-			"build-notes:fixed: hardcoded",
-			"build-notes:header: prepended header",
+			"determine-notes:fixed: hardcoded",
+			"determine-notes:header: prepended header",
 			"release:a: published a",
 			"release:b: published b",
 		]);
@@ -292,7 +292,7 @@ describe("runRelease", () => {
 			"read-changes ok",
 			"determine-kind ok",
 			"determine-version skipped",
-			"build-notes skipped",
+			"determine-notes skipped",
 		]);
 		expect(report.records.at(-1)?.reason).toBe("no release-worthy changes");
 		expect(report.components[0]?.status).toBe("unchanged");
@@ -330,7 +330,7 @@ describe("runRelease", () => {
 
 	it("rejects missing phases and malformed outputs", async () => {
 		await expect(release(basics().slice(0, 1)).run(options)).rejects.toThrow(
-			"no step provided for: determine-kind, build-notes",
+			"no step provided for: determine-kind, determine-notes",
 		);
 
 		const steps = basics();
@@ -415,7 +415,7 @@ describe("runRelease", () => {
 			"ok read-changes",
 			"ok determine-kind",
 			"ok determine-version",
-			"ok build-notes",
+			"ok determine-notes",
 			"finish released",
 		]);
 		expect(report.records).toHaveLength(5);
@@ -654,8 +654,8 @@ describe("components", () => {
 			"cli determine-kind kinds",
 			"core determine-version semver",
 			"cli determine-version semver",
-			"core build-notes fixed",
-			"cli build-notes fixed",
+			"core determine-notes fixed",
+			"cli determine-notes fixed",
 			"core release each",
 			"cli release each",
 		]);

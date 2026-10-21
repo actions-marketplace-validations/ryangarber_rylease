@@ -29,11 +29,13 @@ describe("step inputs", () => {
 			.toHaveProperty("kind")
 			.toEqualTypeOf<Kind | undefined>();
 		expectTypeOf<
-			StepInput<"build-notes">["kind"]
+			StepInput<"determine-notes">["kind"]
 		>().toEqualTypeOf<ReleaseKind>();
-		expectTypeOf<StepInput<"build-notes">["version"]>().toEqualTypeOf<string>();
-		expectTypeOf<StepInput<"build-notes">["tag"]>().toEqualTypeOf<string>();
-		expectTypeOf<StepInput<"build-notes">>()
+		expectTypeOf<
+			StepInput<"determine-notes">["version"]
+		>().toEqualTypeOf<string>();
+		expectTypeOf<StepInput<"determine-notes">["tag"]>().toEqualTypeOf<string>();
+		expectTypeOf<StepInput<"determine-notes">>()
 			.toHaveProperty("notes")
 			.toEqualTypeOf<string | undefined>();
 		expectTypeOf<StepInput<"release">["releases"]>().toEqualTypeOf<
@@ -43,7 +45,7 @@ describe("step inputs", () => {
 
 	it("are contextually typed by `phase` and `scope`", () => {
 		defineStep({
-			phase: "build-notes",
+			phase: "determine-notes",
 			name: "header",
 			run: ({ version, notes }) => {
 				expectTypeOf(version).toEqualTypeOf<string>();
@@ -54,7 +56,7 @@ describe("step inputs", () => {
 		defineRelease({
 			steps: [
 				{
-					phase: "build-notes",
+					phase: "determine-notes",
 					name: "inline",
 					run: ({ kind }) => {
 						expectTypeOf(kind).toEqualTypeOf<"breaking" | "feature" | "fix">();
@@ -151,7 +153,7 @@ describe("facts", () => {
 			},
 		});
 		defineStep({
-			phase: "build-notes",
+			phase: "determine-notes",
 			name: "titles",
 			scope: "all",
 			needs: ["changes.title"],

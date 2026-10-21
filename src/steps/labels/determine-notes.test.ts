@@ -1,6 +1,6 @@
 import type { Change } from "../../core/types.ts";
 import { runStep } from "../../testing/step.ts";
-import { labelsBuildNotes } from "./build-notes.ts";
+import { labelsBuildNotes } from "./determine-notes.ts";
 
 const pr = (title: string, ...labels: string[]): Change => ({
 	title,
@@ -20,7 +20,7 @@ const notes = (
 		version: "1.1.0",
 	});
 
-describe("labels/build-notes", () => {
+describe("labels/determine-notes", () => {
 	it("groups changes by label, in the first section that fits", async () => {
 		const output = await notes(
 			[

@@ -63,7 +63,7 @@ describe("conventional", () => {
 				/^determine-kind conventional\/determine-kind: 'fix\(x\)!' in title/,
 			),
 			"determine-version semver: 2.0.0: 'breaking' from 1.0.0, bumps major",
-			"build-notes conventional/build-notes: breaking release; breaking changes: 1, features: 2",
+			"determine-notes conventional/determine-notes: breaking release; breaking changes: 1, features: 2",
 			`release git/create-tag: tagged v2.0.0 at ${head.slice(0, 7)} and pushed to origin`,
 		]);
 		expect(report.notes).toBe(notes);
@@ -203,7 +203,7 @@ describe("conventional", () => {
 		const [tag] = conventional({
 			"conventional/read-commits": false,
 			"conventional/determine-kind": false,
-			"conventional/build-notes": false,
+			"conventional/determine-notes": false,
 			"github/create-release": false,
 			"git/create-tag": { move: ["v{major}"], push: false },
 		});

@@ -152,7 +152,7 @@ const REQUIRED_PHASES = PHASES.filter(
 const PHASE_VALUES = {
 	"read-changes": "changes",
 	"determine-kind": "kind",
-	"build-notes": "notes",
+	"determine-notes": "notes",
 	write: "releases",
 	stage: "releases",
 	release: "releases",
@@ -1062,7 +1062,7 @@ function applyTo(step: AnyStep, state: State, output: Record<string, unknown>) {
 			state.kind = output.kind as Kind;
 			state.exact = output.version as string | undefined;
 			break;
-		case "build-notes":
+		case "determine-notes":
 			if (typeof output.notes !== "string") {
 				throw new TypeError("invalid output: 'notes' must be a string");
 			}

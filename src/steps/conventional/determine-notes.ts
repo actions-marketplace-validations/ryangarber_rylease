@@ -13,8 +13,8 @@ import { mentionsBreaking, parseTitle, type Title } from "./classify.ts";
  * conventional types, then the rest.
  */
 export const conventionalBuildNotes = defineStep({
-	phase: "build-notes",
-	name: "conventional/build-notes",
+	phase: "determine-notes",
+	name: "conventional/determine-notes",
 	description:
 		"`### Breaking Changes`, `### Features`, `### Bug Fixes`, `### Performance Improvements` and `### Reverts` sections, then `### Other` for everything else.",
 	options: {

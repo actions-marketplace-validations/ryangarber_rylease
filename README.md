@@ -5,7 +5,7 @@ A release pipeline that doesn't fight you.
 Everything is a **step**: a small, named, strictly typed function that does one auditable thing and says why. Steps run in a fixed order of phases. Each one receives the environment, your own context, and the outputs of every step before it.
 
 ```
-read-version → read-changes → determine-kind → determine-version → build-notes → write → stage → release
+read-version → read-changes → determine-kind → determine-version → determine-notes → write → stage → release
 ```
 
 rylease handles `read-version` and `determine-version` itself. It finds the previous release with the release's **history**, e.g. the nearest tag on HEAD, and works out the next version with its **scheme**, e.g. semver, on a **channel** if there is one, e.g. `2.0.0-next.1`. Both come from the preset, unless the release sets its own; there are no other defaults. No step parses or bumps a version; every step takes it as plain text. `write` steps change files, `stage` steps commit them (or propose them in a pull request), and `release` steps ship the result.
@@ -48,7 +48,7 @@ rylease release · main · /home/runner/work/project/project
   ✔ read-changes       conventional/read-commits    12ms   3 changes in 2 commits since 0d92bfa
   ✔ determine-kind     conventional/determine-kind  <1ms   'feat' in title (commit 3a7a7e3)
   ✔ determine-version  semver                       <1ms   1.1.0: 'feature' from 1.0.0, bumps minor
-  ✔ build-notes        conventional/build-notes     <1ms   feature release; features: 1, bug fixes: 1, other: 1
+  ✔ determine-notes        conventional/determine-notes     <1ms   feature release; features: 1, bug fixes: 1, other: 1
   ✔ release            git/create-tag               92ms   tagged v1.1.0 at 3a7a7e3 and pushed to origin
   ✔ release            github/create-release        410ms  created release v1.1.0: https://github.com/me/project/releases/tag/v1.1.0
   ✔ release            announce                     130ms  announced 1.1.0 in #releases
@@ -243,7 +243,7 @@ Each phase has more than one way to fill it. Leave a preset's step out with `fal
 |---|---|---|
 | `read-changes` | `conventional/read-commits` | `github/read-pull-requests`, `keep-a-changelog/read-unreleased`, `change-files/read` |
 | `determine-kind` | `conventional/determine-kind` | `labels/determine-kind`, `components/dependents` |
-| `build-notes` | `conventional/build-notes` | `labels/build-notes` |
+| `determine-notes` | `conventional/determine-notes` | `labels/determine-notes` |
 | `write` | | `fs/write-version`, `fs/write-changes`, `keep-a-changelog/write-release`, `change-files/clean`, `exec/command` |
 | `stage` | | `git/commit`, `github/open-release-pr` |
 | `release` | `git/create-tag`, `github/create-release` | `gitlab/create-release`, `npm/publish`, `exec/command`, `github/upload-release-assets`, … |
@@ -261,13 +261,13 @@ Pull requests, by label, as GitHub's own release notes group them:
   with:
     conventional/read-commits: false
     conventional/determine-kind: false
-    conventional/build-notes: false
+    conventional/determine-notes: false
 - uses: github/read-pull-requests
 - uses: labels/determine-kind # breaking → breaking, enhancement → feature, else fix
-- uses: labels/build-notes
+- uses: labels/determine-notes
 ```
 
-If your pull request titles are conventional, keep `conventional/determine-kind` and `conventional/build-notes`; they read titles whatever the source.
+If your pull request titles are conventional, keep `conventional/determine-kind` and `conventional/determine-notes`; they read titles whatever the source.
 
 A hand-written [Keep a Changelog](https://keepachangelog.com) has its own preset, `keep-a-changelog`: it releases the `## [Unreleased]` section, labels each entry by its `### Added`, `### Fixed` … heading, and commits the changelog before tagging. Its sections don't imply a scheme, so set one, e.g. `scheme: semver`. Don't use it with `fs/write-changes`, since both write `CHANGELOG.md`.
 
@@ -496,7 +496,7 @@ Export the release as the default export of `rylease.config.ts` instead, and the
 |---|---|---|
 | `read-changes` | `changes?` | `{ changes: { title?, description?, reason, link?, labels? }[], reason }` |
 | `determine-kind` | … `changes`, `kind?` | `{ kind: "breaking" \| "feature" \| "fix" \| "none", version?, reason }` |
-| `build-notes` | … `kind` (never `"none"`), `version`, `tag`, `placeholders`, `dependencies`, `notes?` | `{ notes, reason }` |
+| `determine-notes` | … `kind` (never `"none"`), `version`, `tag`, `placeholders`, `dependencies`, `notes?` | `{ notes, reason }` |
 | `write`, `stage` | … `notes`, `releases` (results of earlier `write`, `stage` and `release` steps) | `{ output, files?, defer?, reason }` |
 | `release` | … `notes`, `releases` | `{ output, files?, reason }` |
 
@@ -602,8 +602,8 @@ Presets, with the scheme and history they give:
 |---|---|---|---|
 | `conventional` | The first five below, in this order. | `semver` | `git/tags` |
 | `conventional-pr` | `conventional`'s, with `fs/write-changes` and `github/open-release-pr`. | `semver` | `github/release-pr` |
-| `keep-a-changelog` | `keep-a-changelog/read-unreleased`, `labels/determine-kind`, `labels/build-notes`, `keep-a-changelog/write-release`, `git/commit`, `git/create-tag`, `github/create-release`. | | `git/tags` |
-| `change-files` | `change-files/read`, `labels/determine-kind`, `labels/build-notes`, `change-files/clean`, `fs/write-changes`, `git/commit`, `git/create-tag`, `github/create-release`. | | `git/tags` |
+| `keep-a-changelog` | `keep-a-changelog/read-unreleased`, `labels/determine-kind`, `labels/determine-notes`, `keep-a-changelog/write-release`, `git/commit`, `git/create-tag`, `github/create-release`. | | `git/tags` |
+| `change-files` | `change-files/read`, `labels/determine-kind`, `labels/determine-notes`, `change-files/clean`, `fs/write-changes`, `git/commit`, `git/create-tag`, `github/create-release`. | | `git/tags` |
 
 Each step is also exported on its own (`steps.gitCreateTag`, …).
 
@@ -623,7 +623,7 @@ No options.
 | `types` | `{ [key]: breaking \| feature \| fix \| none }` | `{}` | Kinds by `type` or `type(scope)`, on top of `feat: feature`, e.g. `{ docs: none, chore(deps): fix }`. |
 | `fallback` | `breaking \| feature \| fix \| none` | `fix` | The kind of any other change, untyped ones included. |
 
-#### `conventional/build-notes` · `build-notes`
+#### `conventional/determine-notes` · `determine-notes`
 
 `### Breaking Changes`, `### Features`, `### Bug Fixes`, `### Performance Improvements` and `### Reverts` sections, then `### Other` for everything else.
 
@@ -808,7 +808,7 @@ Moves the entries under `## [Unreleased]` to a heading for the version, and upda
 | `heading` | `string` | `## [{version}] - {date}` | `{version}`, `{tag}` and `{name}` (the component's) are filled in, and the scheme's own, e.g. `{major}`, `{minor}` and `{patch}`, and `{date}` (YYYY-MM-DD). |
 | `channels` | `boolean` | `false` | Also run for releases on a channel, e.g. prereleases; by default only stable releases do. |
 
-#### `labels/build-notes` · `build-notes`
+#### `labels/determine-notes` · `determine-notes`
 
 A `### Title` section per group of labels, e.g. `### Bug Fixes` for `bug`, then `### Other` for everything else. Needs `changes.labels`.
 

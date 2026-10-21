@@ -6,7 +6,7 @@ import { directoryOption, kindFor, readChangeFiles } from "./files.ts";
 /**
  * Collects the change files in `.changes/`: each says what changed, and
  * how much for each component it names. A change's label is its kind, for
- * `labels/determine-kind` and `labels/build-notes`.
+ * `labels/determine-kind` and `labels/determine-notes`.
  */
 export const changeFilesRead = defineStep({
 	phase: "read-changes",

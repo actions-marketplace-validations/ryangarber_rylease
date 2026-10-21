@@ -208,7 +208,7 @@ export type FactoryOptions<F extends { options: OptionsShape }> = OptionsInput<
  *
  * ```ts
  * export const header = defineStep({
- *   phase: "build-notes",
+ *   phase: "determine-notes",
  *   name: "header",
  *   options: { text: z.string().default("Released by rylease") },
  *   run: ({ notes, options }) => ({ notes: `> ${options.text}\n\n${notes}`, reason: "added header" }),

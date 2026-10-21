@@ -7,7 +7,7 @@ import type { Scheme } from "./scheme.ts";
 export const PHASES = [
 	"read-changes",
 	"determine-kind",
-	"build-notes",
+	"determine-notes",
 	"write",
 	"stage",
 	"release",
@@ -104,7 +104,7 @@ export interface WriteOutput extends ReleaseOutput {
 export interface StepOutputs {
 	"read-changes": ChangesOutput;
 	"determine-kind": KindOutput;
-	"build-notes": NotesOutput;
+	"determine-notes": NotesOutput;
 	write: WriteOutput;
 	stage: WriteOutput;
 	release: ReleaseOutput;
@@ -128,7 +128,7 @@ export interface Previous {
 	previousTag?: string;
 }
 
-/** The release being made, from `build-notes` on. */
+/** The release being made, from `determine-notes` on. */
 export interface Next {
 	kind: ReleaseKind;
 	version: string;
@@ -159,7 +159,7 @@ export interface Dependency {
 export interface StepResults {
 	"read-changes": Previous & { changes?: Change[] };
 	"determine-kind": Previous & { changes: Change[]; kind?: Kind };
-	"build-notes": Previous & Next & { changes: Change[]; notes?: string };
+	"determine-notes": Previous & Next & { changes: Change[]; notes?: string };
 	write: Previous &
 		Next & {
 			changes: Change[];

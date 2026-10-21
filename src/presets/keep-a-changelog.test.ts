@@ -53,7 +53,7 @@ describe("keep-a-changelog", () => {
 			"keep-a-changelog/read-unreleased: 2 entries under ## [Unreleased] in CHANGELOG.md",
 			"labels/determine-kind: 'Added' label (CHANGELOG.md line 11)",
 			"semver: 1.1.0: 'feature' from 1.0.0, bumps minor",
-			"labels/build-notes: feature release; added: 1, fixed: 1",
+			"labels/determine-notes: feature release; added: 1, fixed: 1",
 			"keep-a-changelog/write-release: added ## [1.1.0] - 2026-10-20 and its compare link to CHANGELOG.md",
 			expect.stringMatching(/^git\/commit: committed [0-9a-f]{7}$/),
 			expect.stringMatching(
