@@ -10,7 +10,7 @@ import { joinList } from "../../utils/text.ts";
  * commit from `git/commit` and its tags land together or not at all.
  */
 export const gitCreateTag = defineStep({
-	type: "release",
+	phase: "release",
 	name: "git/create-tag",
 	scope: "all",
 	description:

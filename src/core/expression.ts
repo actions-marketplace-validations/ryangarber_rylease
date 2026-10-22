@@ -26,7 +26,7 @@ export interface ExpressionContext {
 	notes?: string;
 	/** The components it depends on released along with it: `{ name, version, … }`. */
 	dependencies?: readonly unknown[];
-	/** The steps that ran before, by name: `{ type, status, reason, output }`. */
+	/** The steps that ran before, by name: `{ phase, status, reason, output }`. */
 	steps: Record<string, unknown>;
 }
 
@@ -104,8 +104,8 @@ export function expressionContext(input: unknown): ExpressionContext {
 				// A component's own steps, and those for all of them.
 				.filter(
 					(record) =>
-						record.type !== "previous" &&
-						record.type !== "version" &&
+						record.phase !== "read-version" &&
+						record.phase !== "determine-version" &&
 						(record.component === undefined ||
 							own === undefined ||
 							record.component === own.name),
@@ -113,11 +113,11 @@ export function expressionContext(input: unknown): ExpressionContext {
 				.map((record) => [
 					record.name,
 					{
-						type: record.type,
+						phase: record.phase,
 						status: record.status,
 						reason: record.reason,
 						output:
-							record.type === "release"
+							record.phase === "release"
 								? (record.output as { output?: unknown } | undefined)?.output
 								: record.output,
 					},

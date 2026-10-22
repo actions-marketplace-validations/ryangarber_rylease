@@ -12,7 +12,7 @@ import { findUnreleased } from "./changelog.ts";
  * `### Added`, `### Fixed` … heading, and the lines under it its description.
  */
 export const keepAChangelogReadUnreleased = defineStep({
-	type: "read-changes",
+	phase: "read-changes",
 	name: "keep-a-changelog/read-unreleased",
 	description:
 		"Collects each entry under `## [Unreleased]` in a Keep a Changelog file, labeled with its `### Added`, `### Fixed` … heading.",

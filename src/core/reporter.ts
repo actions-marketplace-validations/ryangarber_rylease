@@ -1,18 +1,18 @@
 import type { ComponentReport, ReleaseReport } from "./engine.ts";
 import type {
 	ComponentInfo,
-	EngineRecordType,
+	EnginePhase,
 	Environment,
+	Phase,
 	StepRecord,
-	StepType,
 } from "./types.ts";
 
 /** Receives progress from the engine; every hook is optional. */
 export interface Reporter {
 	start?(
 		env: Environment,
-		/** Every step, and the engine's own rows: `previous` and `version`. */
-		steps: readonly { type: StepType | EngineRecordType; name: string }[],
+		/** Every step, and the engine's own rows: `read-version` and `determine-version`. */
+		steps: readonly { phase: Phase | EnginePhase; name: string }[],
 		components: readonly ComponentInfo[],
 	): void;
 	step?(record: StepRecord): void;
@@ -38,7 +38,7 @@ const ANSI = {
 
 type Style = keyof typeof ANSI;
 
-/** Aligned, colored output: one row per step with type, name, duration and reason. */
+/** Aligned, colored output: one row per step with phase, name, duration and reason. */
 export function prettyReporter(options: PrettyReporterOptions = {}): Reporter {
 	const write =
 		options.write ?? ((text: string) => void process.stdout.write(text));
@@ -49,7 +49,7 @@ export function prettyReporter(options: PrettyReporterOptions = {}): Reporter {
 	const paint = (style: Style, text: string) =>
 		color ? `\x1b[${ANSI[style][0]}m${text}\x1b[${ANSI[style][1]}m` : text;
 
-	let typeWidth = 0;
+	let phaseWidth = 0;
 	let nameWidth = 0;
 	let componentWidth = 0;
 	let dryRun = false;
@@ -57,7 +57,7 @@ export function prettyReporter(options: PrettyReporterOptions = {}): Reporter {
 	return {
 		start(env, steps, components) {
 			dryRun = env.dryRun;
-			typeWidth = Math.max(0, ...steps.map((step) => step.type.length));
+			phaseWidth = Math.max(0, ...steps.map((step) => step.phase.length));
 			nameWidth = Math.max(0, ...steps.map((step) => step.name.length));
 			componentWidth =
 				components.length > 1
@@ -74,7 +74,7 @@ export function prettyReporter(options: PrettyReporterOptions = {}): Reporter {
 				skipped: paint("dim", "○"),
 				failed: paint("red", "✖"),
 			}[record.status];
-			const type = paint("magenta", record.type.padEnd(typeWidth));
+			const phase = paint("magenta", record.phase.padEnd(phaseWidth));
 			const name = paint("bold", record.name.padEnd(nameWidth));
 			const component =
 				componentWidth > 0
@@ -91,7 +91,9 @@ export function prettyReporter(options: PrettyReporterOptions = {}): Reporter {
 				record.status === "ok"
 					? record.reason
 					: paint(record.status === "failed" ? "red" : "dim", record.reason);
-			write(`  ${icon} ${component}${type}  ${name}  ${duration}  ${reason}\n`);
+			write(
+				`  ${icon} ${component}${phase}  ${name}  ${duration}  ${reason}\n`,
+			);
 		},
 		finish(report) {
 			const line = (component: ComponentReport) => {

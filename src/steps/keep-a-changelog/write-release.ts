@@ -17,7 +17,7 @@ const UNRELEASED_LINK =
  * link moves on to the new tag, and the version gets its own compare link.
  */
 export const keepAChangelogWriteRelease = defineStep({
-	type: "prepare",
+	phase: "write",
 	name: "keep-a-changelog/write-release",
 	description:
 		"Moves the entries under `## [Unreleased]` to a heading for the version, and updates the compare links, if there are any.",

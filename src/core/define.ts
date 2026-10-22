@@ -19,17 +19,17 @@ import type {
 	AllStepInput,
 	AllStepOutput,
 	EachStepDefinition,
+	Phase,
 	Scope,
 	Step,
 	StepCondition,
 	StepInput,
 	StepOutput,
 	StepPreset,
-	StepType,
 } from "./types.ts";
 
 export type ReleaseConfig<Context> = {
-	/** Steps to run; they're ordered by type, keeping their order within a type. */
+	/** Steps to run; they're ordered by phase, keeping their order within a phase. */
 	steps: readonly Step<Context>[];
 	/**
 	 * How versions look, are ordered and bumped, e.g. `semver()`. Needed
@@ -135,19 +135,20 @@ function fromPreset<K extends "scheme" | "history">(
 }
 
 /** The step a factory makes, by scope. */
-export type ScopedStep<T extends StepType, Sc extends Scope> = Sc extends "all"
+export type ScopedStep<T extends Phase, Sc extends Scope> = Sc extends "all"
 	? AllStepDefinition<T>
 	: EachStepDefinition<T>;
 
 export interface StepFactoryDefinition<
-	T extends StepType,
+	T extends Phase,
 	N extends string,
 	S extends OptionsShape,
 	Sc extends Scope,
 	Needs extends Fact,
 	Provides extends Fact,
 > {
-	type: T;
+	/** Its phase; a function works it out from its options, e.g. a `phase` option. */
+	phase: T | ((options: OptionsValue<S>) => T);
 	/** Identifies the step in reports and in workflow `steps`, e.g. `git/commit`. */
 	name: N;
 	/** One line on what the step does, for generated docs. */
@@ -174,20 +175,21 @@ export interface StepFactoryDefinition<
 
 /** Creates a configured step; the options argument is optional when every option is. */
 export interface StepFactory<
-	T extends StepType = StepType,
+	T extends Phase = Phase,
 	N extends string = string,
 	S extends OptionsShape = OptionsShape,
 	Sc extends Scope = Scope,
 > extends Factory<"step", N, S, ScopedStep<T, Sc>> {
-	readonly type: T;
+	/** Its phase, or a function of its options that works it out. */
+	readonly phase: T | ((options: OptionsValue<S>) => T);
 	readonly scope: Sc;
 	readonly needs: readonly Fact[];
 	readonly provides: readonly Fact[];
 }
 
-/** Any step factory, whatever its type, name or options. */
+/** Any step factory, whatever its phase, name or options. */
 export interface AnyStepFactory extends AnyFactory<"step", Step> {
-	readonly type: StepType;
+	readonly phase: Phase | ((options: never) => Phase);
 	readonly scope: Scope;
 	readonly needs: readonly Fact[];
 	readonly provides: readonly Fact[];
@@ -206,7 +208,7 @@ export type FactoryOptions<F extends { options: OptionsShape }> = OptionsInput<
  *
  * ```ts
  * export const header = defineStep({
- *   type: "build-notes",
+ *   phase: "determine-notes",
  *   name: "header",
  *   options: { text: z.string().default("Released by rylease") },
  *   run: ({ notes, options }) => ({ notes: `> ${options.text}\n\n${notes}`, reason: "added header" }),
@@ -215,7 +217,7 @@ export type FactoryOptions<F extends { options: OptionsShape }> = OptionsInput<
  * ```
  */
 export function defineStep<
-	T extends StepType,
+	T extends Phase,
 	const N extends string,
 	S extends OptionsShape = Empty,
 	Sc extends Scope = "each",
@@ -229,6 +231,11 @@ export function defineStep<
 	const declared = definition.needs ?? [];
 	const needs: readonly Fact[] = typeof declared === "function" ? [] : declared;
 	const provides: readonly Fact[] = definition.provides ?? [];
+	for (const key of ["phase", "name"]) {
+		if (!(key in definition)) {
+			throw new OptionsError([`${definition.name}: ${key} is required`]);
+		}
+	}
 	registerProvider(definition.name, provides);
 	const factory = (options?: unknown) => {
 		const parsed = parseOptions(shape, options, definition.name);
@@ -236,7 +243,10 @@ export function defineStep<
 		const needs: readonly Fact[] =
 			typeof declared === "function" ? declared(parsed) : declared;
 		return {
-			type: definition.type,
+			phase:
+				typeof definition.phase === "function"
+					? definition.phase(parsed)
+					: definition.phase,
 			name: definition.name,
 			...(scope === "all" && { scope }),
 			...(needs.length > 0 && { needs }),
@@ -246,7 +256,7 @@ export function defineStep<
 	};
 	return Object.defineProperties(factory, {
 		kind: { value: "step", enumerable: true },
-		type: { value: definition.type, enumerable: true },
+		phase: { value: definition.phase, enumerable: true },
 		name: { value: definition.name, enumerable: true },
 		description: { value: definition.description, enumerable: true },
 		scope: { value: scope, enumerable: true },

@@ -29,7 +29,7 @@ function fixed(versions: Record<string, string | undefined> = {}): History {
 function basics(kind: Kind = "feature"): Step[] {
 	return [
 		{
-			type: "read-changes",
+			phase: "read-changes",
 			name: "fixed",
 			run: () => ({
 				changes: [{ title: "feat: x", reason: "test" }],
@@ -37,12 +37,12 @@ function basics(kind: Kind = "feature"): Step[] {
 			}),
 		},
 		{
-			type: "determine-kind",
+			phase: "determine-kind",
 			name: "fixed",
 			run: () => ({ kind, reason: `always ${kind}` }),
 		},
 		{
-			type: "build-notes",
+			phase: "determine-notes",
 			name: "fixed",
 			run: () => ({ notes: "notes", reason: "hardcoded" }),
 		},
@@ -59,9 +59,9 @@ const release = (
 ) => defineRelease({ steps, scheme: semver(), history: fixed(), ...config });
 
 describe("runRelease", () => {
-	it("runs steps by phase, chaining outputs of the same type", async () => {
+	it("runs steps by phase, chaining outputs of the same phase", async () => {
 		const header = defineStep({
-			type: "build-notes",
+			phase: "determine-notes",
 			name: "header",
 			run: ({ tag, notes }) => ({
 				notes: `# ${tag}\n\n${notes}`,
@@ -70,7 +70,7 @@ describe("runRelease", () => {
 		});
 		const seen: unknown[] = [];
 		const publish = (name: string): Step => ({
-			type: "release",
+			phase: "release",
 			name,
 			run: ({ notes, releases }) => {
 				seen.push({ notes, releases });
@@ -86,14 +86,14 @@ describe("runRelease", () => {
 		]).run(options);
 
 		expect(
-			report.records.map((r) => `${r.type}:${r.name}: ${r.reason}`),
+			report.records.map((r) => `${r.phase}:${r.name}: ${r.reason}`),
 		).toEqual([
-			"previous:fixed: found 1.0.0",
+			"read-version:fixed: found 1.0.0",
 			"read-changes:fixed: 1 change",
 			"determine-kind:fixed: always feature",
-			"version:semver: 1.1.0: 'feature' from 1.0.0, bumps minor",
-			"build-notes:fixed: hardcoded",
-			"build-notes:header: prepended header",
+			"determine-version:semver: 1.1.0: 'feature' from 1.0.0, bumps minor",
+			"determine-notes:fixed: hardcoded",
+			"determine-notes:header: prepended header",
 			"release:a: published a",
 			"release:b: published b",
 		]);
@@ -132,7 +132,7 @@ describe("runRelease", () => {
 		await release([
 			...basics("breaking"),
 			{
-				type: "release",
+				phase: "release",
 				name: "inspect",
 				run: ({ component, previousTag, tag, placeholders }) => {
 					received = { component, previousTag, tag, placeholders };
@@ -163,7 +163,7 @@ describe("runRelease", () => {
 			steps: [
 				...basics(),
 				{
-					type: "release",
+					phase: "release",
 					name: "inspect",
 					run: ({ env, context, history }) => {
 						context.calls.push("inspect");
@@ -189,7 +189,7 @@ describe("runRelease", () => {
 			name: string,
 			condition?: (input: StepInput<"release">) => boolean,
 		): Step => ({
-			type: "release",
+			phase: "release",
 			name,
 			...(condition && {
 				if: Object.assign(condition, { source: `${name}?` }),
@@ -214,7 +214,7 @@ describe("runRelease", () => {
 
 	it("fails when conditions skip every step of a phase", async () => {
 		const steps = basics().map((step) =>
-			step.type === "determine-kind" ? { ...step, if: () => false } : step,
+			step.phase === "determine-kind" ? { ...step, if: () => false } : step,
 		) as Step[];
 		await expect(release(steps).run(options)).rejects.toThrow(
 			"no 'determine-kind' step ran, so it has no kind",
@@ -226,7 +226,7 @@ describe("runRelease", () => {
 		const report = await release([
 			...basics(),
 			{
-				type: "release",
+				phase: "release",
 				name: "upload",
 				run: ({ env: _, context: __, history: ___, ...input }) => {
 					inputs.push(input);
@@ -287,12 +287,12 @@ describe("runRelease", () => {
 	it("stops after the kind phase when there is nothing to release", async () => {
 		const report = await release(basics("none")).run(options);
 		expect(report.status).toBe("unchanged");
-		expect(report.records.map((r) => `${r.type} ${r.status}`)).toEqual([
-			"previous ok",
+		expect(report.records.map((r) => `${r.phase} ${r.status}`)).toEqual([
+			"read-version ok",
 			"read-changes ok",
 			"determine-kind ok",
-			"version skipped",
-			"build-notes skipped",
+			"determine-version skipped",
+			"determine-notes skipped",
 		]);
 		expect(report.records.at(-1)?.reason).toBe("no release-worthy changes");
 		expect(report.components[0]?.status).toBe("unchanged");
@@ -302,14 +302,14 @@ describe("runRelease", () => {
 		const run = release([
 			...basics(),
 			{
-				type: "release",
+				phase: "release",
 				name: "boom",
 				run: () => {
 					throw new Error("kaboom");
 				},
 			},
 			{
-				type: "release",
+				phase: "release",
 				name: "after",
 				run: () => ({ output: null, reason: "unreachable" }),
 			},
@@ -330,7 +330,7 @@ describe("runRelease", () => {
 
 	it("rejects missing phases and malformed outputs", async () => {
 		await expect(release(basics().slice(0, 1)).run(options)).rejects.toThrow(
-			"no step provided for: determine-kind, build-notes",
+			"no step provided for: determine-kind, determine-notes",
 		);
 
 		const steps = basics();
@@ -342,7 +342,7 @@ describe("runRelease", () => {
 			"'kind' must be one of breaking, feature, fix, none",
 		);
 		const files = {
-			type: "release",
+			phase: "release",
 			name: "files",
 			run: () => ({ output: null, files: "a", reason: "x" }),
 		};
@@ -387,7 +387,7 @@ describe("runRelease", () => {
 			"invalid output: 'notes' must be a string",
 		);
 		const noOutput = {
-			type: "release",
+			phase: "release",
 			name: "x",
 			run: () => ({ reason: "x" }),
 		} as unknown as Step;
@@ -405,17 +405,17 @@ describe("runRelease", () => {
 					calls.push(
 						`start ${env.branch} ${steps.length} ${components.map((c) => c.name)}`,
 					),
-				step: (record) => calls.push(`${record.status} ${record.type}`),
+				step: (record) => calls.push(`${record.status} ${record.phase}`),
 				finish: (result) => calls.push(`finish ${result.status}`),
 			},
 		});
 		expect(calls).toEqual([
 			"start main 5 root",
-			"ok previous",
+			"ok read-version",
 			"ok read-changes",
 			"ok determine-kind",
-			"ok version",
-			"ok build-notes",
+			"ok determine-version",
+			"ok determine-notes",
 			"finish released",
 		]);
 		expect(report.records).toHaveLength(5);
@@ -474,7 +474,7 @@ describe("versions", () => {
 			options,
 		);
 		expect(report.records[0]).toMatchObject({
-			type: "previous",
+			phase: "read-version",
 			name: "fixed",
 			reason: "found 1.0.0",
 		});
@@ -482,7 +482,7 @@ describe("versions", () => {
 
 	it("can be set exactly by a determine-kind step, if they come after", async () => {
 		const exact = (version: string): Step => ({
-			type: "determine-kind",
+			phase: "determine-kind",
 			name: "release-as",
 			run: () => ({ kind: "breaking", version, reason: "Release-As" }),
 		});
@@ -502,7 +502,7 @@ describe("versions", () => {
 
 describe("facts", () => {
 	const labeled = defineStep({
-		type: "determine-kind",
+		phase: "determine-kind",
 		name: "labeled",
 		needs: ["changes.labels"],
 		run: ({ changes }) => ({
@@ -511,7 +511,7 @@ describe("facts", () => {
 		}),
 	});
 	const withLabels = defineStep({
-		type: "read-changes",
+		phase: "read-changes",
 		name: "with-labels",
 		provides: ["changes.labels"],
 		run: () => ({
@@ -551,7 +551,7 @@ describe("facts", () => {
 		expect(report.kind).toBe("feature");
 
 		const lying = defineStep({
-			type: "read-changes",
+			phase: "read-changes",
 			name: "lying",
 			provides: ["changes.labels"],
 			run: () => ({ changes: [{ reason: "pr" }], reason: "1 pr" }) as never,
@@ -592,7 +592,7 @@ describe("facts", () => {
 
 	it("include the scheme's traits", async () => {
 		const npm = defineStep({
-			type: "release",
+			phase: "release",
 			name: "npm-like",
 			needs: ["version.semver"],
 			run: () => ({ output: null, reason: "ok" }),
@@ -616,7 +616,7 @@ describe("components", () => {
 	const core = { name: "core", path: "packages/core" };
 	const cli = { name: "cli", path: "packages/cli", dependsOn: ["core"] };
 	const kinds = (byName: Record<string, Kind>): Step => ({
-		type: "determine-kind",
+		phase: "determine-kind",
 		name: "kinds",
 		run: ({ component }) => ({
 			kind: byName[component.name] ?? "none",
@@ -632,7 +632,7 @@ describe("components", () => {
 				kinds({ core: "fix", cli: "feature" }),
 				basics()[2] as Step,
 				{
-					type: "release",
+					phase: "release",
 					name: "each",
 					run: ({ component, tag }) => {
 						seen.push(`${component.name} ${tag}`);
@@ -644,18 +644,18 @@ describe("components", () => {
 		).run(options);
 		expect(seen).toEqual(["core core@1.0.1", "cli cli@1.1.0"]);
 		expect(
-			report.records.map((r) => `${r.component ?? "*"} ${r.type} ${r.name}`),
+			report.records.map((r) => `${r.component ?? "*"} ${r.phase} ${r.name}`),
 		).toEqual([
-			"core previous fixed",
-			"cli previous fixed",
+			"core read-version fixed",
+			"cli read-version fixed",
 			"core read-changes fixed",
 			"cli read-changes fixed",
 			"core determine-kind kinds",
 			"cli determine-kind kinds",
-			"core version semver",
-			"cli version semver",
-			"core build-notes fixed",
-			"cli build-notes fixed",
+			"core determine-version semver",
+			"cli determine-version semver",
+			"core determine-notes fixed",
+			"cli determine-notes fixed",
 			"core release each",
 			"cli release each",
 		]);
@@ -673,10 +673,10 @@ describe("components", () => {
 		const seen: string[] = [];
 		const report = await release(
 			[
-				...basics().filter((step) => step.type !== "determine-kind"),
+				...basics().filter((step) => step.phase !== "determine-kind"),
 				kinds({ cli: "fix" }),
 				{
-					type: "release",
+					phase: "release",
 					name: "all",
 					scope: "all",
 					run: ({ components }) => {
@@ -700,7 +700,7 @@ describe("components", () => {
 
 	it("are given to `all` steps together, which may change any of them", async () => {
 		const raise: Step = {
-			type: "determine-kind",
+			phase: "determine-kind",
 			name: "raise",
 			scope: "all",
 			run: ({ components }) => ({
@@ -717,7 +717,7 @@ describe("components", () => {
 		};
 		const report = await release(
 			[
-				...basics().filter((s) => s.type !== "determine-kind"),
+				...basics().filter((s) => s.phase !== "determine-kind"),
 				kinds({ core: "breaking" }),
 				raise,
 			],
@@ -751,7 +751,7 @@ describe("components", () => {
 		await release(
 			[
 				{
-					type: "read-changes",
+					phase: "read-changes",
 					name: "paths",
 					run: ({ component }) => {
 						received = {
@@ -838,19 +838,19 @@ describe("components", () => {
 	});
 });
 
-describe("prepare and release", () => {
-	const prepare = (name: string, extra: object = {}): Step => ({
-		type: "prepare",
+describe("write and release", () => {
+	const write = (name: string, extra: object = {}): Step => ({
+		phase: "write",
 		name,
 		run: () => ({
 			output: name,
 			files: [`${name}.txt`],
-			reason: `prepared ${name}`,
+			reason: `wrote ${name}`,
 			...extra,
 		}),
 	});
 	const ship: Step = {
-		type: "release",
+		phase: "release",
 		name: "ship",
 		run: ({ releases }) => ({
 			output: releases.flatMap((r) => r.files),
@@ -858,25 +858,23 @@ describe("prepare and release", () => {
 		}),
 	};
 
-	it("prepares before releasing, whatever the order they're listed in", async () => {
+	it("writes before releasing, whatever the order they're listed in", async () => {
 		const report = await release([
 			ship,
-			prepare("a"),
+			write("a"),
 			...basics(),
-			prepare("b"),
+			write("b"),
 		]).run(options);
-		expect(report.records.slice(-3).map((r) => `${r.type} ${r.name}`)).toEqual([
-			"prepare a",
-			"prepare b",
-			"release ship",
-		]);
+		expect(report.records.slice(-3).map((r) => `${r.phase} ${r.name}`)).toEqual(
+			["write a", "write b", "release ship"],
+		);
 		expect(report.releases.at(-1)?.output).toEqual(["a.txt", "b.txt"]);
 	});
 
-	it("leaves the release to later when a prepare step defers it", async () => {
+	it("leaves the release to later when a write step defers it", async () => {
 		const report = await release([
 			...basics(),
-			prepare("pr", { defer: "released when #12 merges" }),
+			write("pr", { defer: "released when #12 merges" }),
 			ship,
 		]).run(options);
 		expect(report.status).toBe("pending");
@@ -889,8 +887,8 @@ describe("prepare and release", () => {
 		});
 	});
 
-	it("runs only release steps for a given release, prepare steps included", async () => {
-		const report = await release([...basics(), prepare("a"), ship]).run({
+	it("runs only release steps for a given release, write steps included", async () => {
+		const report = await release([...basics(), write("a"), ship]).run({
 			...options,
 			release: { version: "2.0.0" },
 		});
@@ -941,7 +939,7 @@ describe("prepare and release", () => {
 						}
 					: { version: "3.0.0", reason: "v3.0.0" },
 		};
-		const report = await release([...basics(), prepare("a"), ship], {
+		const report = await release([...basics(), write("a"), ship], {
 			components: [{ name: "a" }, { name: "b", path: "b" }],
 			history,
 		}).run(options);
@@ -1045,7 +1043,7 @@ describe("channels", () => {
 			steps: [
 				...basics("breaking"),
 				{
-					type: "release",
+					phase: "release",
 					name: "inspect",
 					run: ({ env, placeholders }) => {
 						received = { channel: env.channel, placeholders };

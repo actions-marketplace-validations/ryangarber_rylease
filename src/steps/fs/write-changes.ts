@@ -7,7 +7,7 @@ import { channelsOption, skipOnChannel } from "../channels.ts";
 
 /** Writes release notes to a file, creating it if needed. */
 export const fsWriteChanges = defineStep({
-	type: "prepare",
+	phase: "write",
 	name: "fs/write-changes",
 	description: "Writes a heading and the notes to a file.",
 	options: {

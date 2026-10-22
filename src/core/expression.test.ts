@@ -71,7 +71,7 @@ describe("compileExpression", () => {
 
 describe("expressionContext", () => {
 	const record = (component?: string) => ({
-		type: "release" as const,
+		phase: "release" as const,
 		name: "github/create-release",
 		...(component && { component }),
 		status: "ok" as const,
@@ -94,7 +94,7 @@ describe("expressionContext", () => {
 		env: { cwd: "/p", branch: "main", dryRun: true },
 		context: undefined,
 		history: [
-			{ ...record(), type: "previous" as const, name: "git/tags" },
+			{ ...record(), phase: "read-version" as const, name: "git/tags" },
 			record("core"),
 			record("cli"),
 		],
@@ -116,7 +116,7 @@ describe("expressionContext", () => {
 			notes: "n",
 			steps: {
 				"github/create-release": {
-					type: "release",
+					phase: "release",
 					status: "ok",
 					reason: "created cli",
 					output: { url: "cli" },

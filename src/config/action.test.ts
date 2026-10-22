@@ -168,7 +168,7 @@ describe("action", () => {
 			.mockImplementation(() => true);
 		expect(
 			await main(
-				env("- uses: conventional/build-notes\n  with: { shift: 1 }"),
+				env("- uses: conventional/determine-notes\n  with: { shift: 1 }"),
 				null,
 			),
 		).toBe(1);

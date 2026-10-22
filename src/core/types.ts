@@ -3,17 +3,17 @@ import type { ChangeWith, Fact, Narrow, ProvidedOutput } from "./facts.ts";
 import type { History } from "./history.ts";
 import type { Scheme } from "./scheme.ts";
 
-/** Every step type, in the order the engine runs them. */
+/** Every phase, in the order the engine runs its steps. */
 export const PHASES = [
 	"read-changes",
 	"determine-kind",
-	"build-notes",
-	"prepare",
-	"commit",
+	"determine-notes",
+	"write",
+	"stage",
 	"release",
 ] as const;
 
-export type StepType = (typeof PHASES)[number];
+export type Phase = (typeof PHASES)[number];
 
 /**
  * How much a release changes, whatever the version scheme: the scheme decides
@@ -90,8 +90,8 @@ export interface ReleaseOutput {
 	reason: string;
 }
 
-/** What `prepare` and `commit` steps return. */
-export interface PrepareOutput extends ReleaseOutput {
+/** What `write` and `stage` steps return. */
+export interface WriteOutput extends ReleaseOutput {
 	/**
 	 * Leaves the release to later, e.g. once a release pull request merges:
 	 * every `release` step is skipped with this reason, and the run is
@@ -100,17 +100,17 @@ export interface PrepareOutput extends ReleaseOutput {
 	defer?: string;
 }
 
-/** What each step type must return. */
+/** What the steps of each phase must return. */
 export interface StepOutputs {
 	"read-changes": ChangesOutput;
 	"determine-kind": KindOutput;
-	"build-notes": NotesOutput;
-	prepare: PrepareOutput;
-	commit: PrepareOutput;
+	"determine-notes": NotesOutput;
+	write: WriteOutput;
+	stage: WriteOutput;
 	release: ReleaseOutput;
 }
 
-/** The output of a prior `prepare` or `release` step, as later ones see it. */
+/** The output of a prior `write`, `stage` or `release` step, as later ones see it. */
 export interface ReleaseResult {
 	name: string;
 	output: unknown;
@@ -128,7 +128,7 @@ export interface Previous {
 	previousTag?: string;
 }
 
-/** The release being made, from `build-notes` on. */
+/** The release being made, from `determine-notes` on. */
 export interface Next {
 	kind: ReleaseKind;
 	version: string;
@@ -152,22 +152,22 @@ export interface Dependency {
 }
 
 /**
- * What a step receives for one component, by type. Values from earlier phases
+ * What a step receives for one component, by phase. Values from earlier phases
  * are always present; the value of a step's own phase is only present when
- * an earlier step of the same type already ran.
+ * an earlier step of the same phase already ran.
  */
 export interface StepResults {
 	"read-changes": Previous & { changes?: Change[] };
 	"determine-kind": Previous & { changes: Change[]; kind?: Kind };
-	"build-notes": Previous & Next & { changes: Change[]; notes?: string };
-	prepare: Previous &
+	"determine-notes": Previous & Next & { changes: Change[]; notes?: string };
+	write: Previous &
 		Next & {
 			changes: Change[];
 			notes: string;
 			releases: readonly ReleaseResult[];
 		};
-	commit: StepResults["prepare"];
-	release: StepResults["prepare"];
+	stage: StepResults["write"];
+	release: StepResults["write"];
 }
 
 export interface Environment {
@@ -190,11 +190,11 @@ export type Scope = "each" | "all";
 export type StepStatus = "ok" | "skipped" | "failed";
 
 /** What the engine itself records: the previous version, and the next. */
-export type EngineRecordType = "previous" | "version";
+export type EnginePhase = "read-version" | "determine-version";
 
 /** The audit record of a single step, or of the engine's own work. */
 export interface StepRecord {
-	type: StepType | EngineRecordType;
+	phase: Phase | EnginePhase;
 	name: string;
 	/** The component it ran for; absent for `all` steps. */
 	component?: string;
@@ -215,36 +215,36 @@ interface Shared<Ctx> {
 
 /** What a step receives, for one component. */
 export type StepInput<
-	T extends StepType,
+	T extends Phase,
 	Ctx = unknown,
 	N extends Fact = never,
 > = Narrow<StepResults[T], N> & Shared<Ctx>;
 
 /** What an `all` step receives: every component that's still releasing. */
 export type AllStepInput<
-	T extends StepType,
+	T extends Phase,
 	Ctx = unknown,
 	N extends Fact = never,
 > = { components: readonly Narrow<StepResults[T], N>[] } & Shared<Ctx>;
 
 /** What a step returns, for one component. */
 export type StepOutput<
-	T extends StepType,
+	T extends Phase,
 	P extends Fact = never,
 > = ProvidedOutput<StepOutputs[T], P>;
 
 /**
- * What an `all` step returns: in `prepare` and `release`, one result for all of them;
+ * What an `all` step returns: in `write`, `stage` and `release`, one result for all of them;
  * otherwise a result per component, by name, leaving out those it doesn't
  * change.
  */
 export type AllStepOutput<
-	T extends StepType,
+	T extends Phase,
 	P extends Fact = never,
 > = T extends "release"
 	? ReleaseOutput
-	: T extends "prepare" | "commit"
-		? PrepareOutput
+	: T extends "write" | "stage"
+		? WriteOutput
 		: {
 				results: Partial<Record<string, StepOutput<T, P>>>;
 				reason: string;
@@ -259,8 +259,8 @@ export interface StepCondition<I> {
 	readonly source?: string;
 }
 
-interface StepBase<T extends StepType> {
-	type: T;
+interface StepBase<T extends Phase> {
+	phase: T;
 	name: string;
 	/** Facts the step relies on, e.g. `changes.labels`; checked before anything runs. */
 	needs?: readonly Fact[];
@@ -277,7 +277,7 @@ export interface StepPreset {
 	history?: History | readonly History[];
 }
 
-export interface EachStepDefinition<T extends StepType, Ctx = unknown>
+export interface EachStepDefinition<T extends Phase, Ctx = unknown>
 	extends StepBase<T> {
 	scope?: "each";
 	/** When set, the step only runs if this returns true; otherwise it's skipped. */
@@ -285,7 +285,7 @@ export interface EachStepDefinition<T extends StepType, Ctx = unknown>
 	run: (input: StepInput<T, Ctx>) => StepOutputs[T] | Promise<StepOutputs[T]>;
 }
 
-export interface AllStepDefinition<T extends StepType, Ctx = unknown>
+export interface AllStepDefinition<T extends Phase, Ctx = unknown>
 	extends StepBase<T> {
 	scope: "all";
 	/** When set, the step only runs if this returns true; otherwise it's skipped. */
@@ -295,13 +295,13 @@ export interface AllStepDefinition<T extends StepType, Ctx = unknown>
 	) => AllStepOutput<T> | Promise<AllStepOutput<T>>;
 }
 
-export type StepDefinition<T extends StepType, Ctx = unknown> =
+export type StepDefinition<T extends Phase, Ctx = unknown> =
 	| EachStepDefinition<T, Ctx>
 	| AllStepDefinition<T, Ctx>;
 
-/** Any step, discriminated by `type` and `scope`. */
+/** Any step, discriminated by `phase` and `scope`. */
 export type Step<Ctx = unknown> = {
-	[T in StepType]: StepDefinition<T, Ctx>;
-}[StepType];
+	[T in Phase]: StepDefinition<T, Ctx>;
+}[Phase];
 
 export type { ChangeWith, Fact };

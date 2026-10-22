@@ -24,7 +24,7 @@ import {
  * upload their own.
  */
 export const githubUploadReleaseAssets = defineStep({
-	type: "release",
+	phase: "release",
 	name: "github/upload-release-assets",
 	description:
 		"Uploads files to the GitHub release, creating it (with the notes) if no other job has yet.",

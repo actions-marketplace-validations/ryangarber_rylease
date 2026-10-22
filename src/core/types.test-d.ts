@@ -29,11 +29,13 @@ describe("step inputs", () => {
 			.toHaveProperty("kind")
 			.toEqualTypeOf<Kind | undefined>();
 		expectTypeOf<
-			StepInput<"build-notes">["kind"]
+			StepInput<"determine-notes">["kind"]
 		>().toEqualTypeOf<ReleaseKind>();
-		expectTypeOf<StepInput<"build-notes">["version"]>().toEqualTypeOf<string>();
-		expectTypeOf<StepInput<"build-notes">["tag"]>().toEqualTypeOf<string>();
-		expectTypeOf<StepInput<"build-notes">>()
+		expectTypeOf<
+			StepInput<"determine-notes">["version"]
+		>().toEqualTypeOf<string>();
+		expectTypeOf<StepInput<"determine-notes">["tag"]>().toEqualTypeOf<string>();
+		expectTypeOf<StepInput<"determine-notes">>()
 			.toHaveProperty("notes")
 			.toEqualTypeOf<string | undefined>();
 		expectTypeOf<StepInput<"release">["releases"]>().toEqualTypeOf<
@@ -41,9 +43,9 @@ describe("step inputs", () => {
 		>();
 	});
 
-	it("are contextually typed by `type` and `scope`", () => {
+	it("are contextually typed by `phase` and `scope`", () => {
 		defineStep({
-			type: "build-notes",
+			phase: "determine-notes",
 			name: "header",
 			run: ({ version, notes }) => {
 				expectTypeOf(version).toEqualTypeOf<string>();
@@ -54,7 +56,7 @@ describe("step inputs", () => {
 		defineRelease({
 			steps: [
 				{
-					type: "build-notes",
+					phase: "determine-notes",
 					name: "inline",
 					run: ({ kind }) => {
 						expectTypeOf(kind).toEqualTypeOf<"breaking" | "feature" | "fix">();
@@ -62,7 +64,7 @@ describe("step inputs", () => {
 					},
 				},
 				{
-					type: "release",
+					phase: "release",
 					name: "inline-all",
 					scope: "all",
 					run: ({ components }) => {
@@ -78,19 +80,19 @@ describe("step inputs", () => {
 
 	it("require a reason and the right output shape", () => {
 		defineStep({
-			type: "determine-kind",
+			phase: "determine-kind",
 			name: "no-reason",
 			// @ts-expect-error `reason` is required
 			run: () => ({ kind: "breaking" }),
 		});
 		defineStep({
-			type: "determine-kind",
+			phase: "determine-kind",
 			name: "bad-kind",
 			// @ts-expect-error not a kind
 			run: () => ({ kind: "major", reason: "x" }),
 		});
 		defineStep({
-			type: "determine-kind",
+			phase: "determine-kind",
 			name: "all-kinds",
 			scope: "all",
 			run: ({ components }) => ({
@@ -104,7 +106,7 @@ describe("step inputs", () => {
 			}),
 		});
 		defineStep({
-			type: "determine-kind",
+			phase: "determine-kind",
 			name: "all-without-results",
 			scope: "all",
 			// @ts-expect-error an `all` step returns results by component
@@ -113,10 +115,10 @@ describe("step inputs", () => {
 	});
 });
 
-describe("prepare, commit and release", () => {
-	it("share their input, and prepare steps may defer the release", () => {
+describe("write, stage and release", () => {
+	it("share their input, and write steps may defer the release", () => {
 		defineStep({
-			type: "prepare",
+			phase: "write",
 			name: "propose",
 			run: ({ dependencies, env }) => {
 				expectTypeOf(dependencies).toEqualTypeOf<readonly Dependency[]>();
@@ -125,7 +127,7 @@ describe("prepare, commit and release", () => {
 			},
 		});
 		defineStep({
-			type: "commit",
+			phase: "stage",
 			name: "commit",
 			scope: "all",
 			run: ({ components }) => ({
@@ -140,7 +142,7 @@ describe("prepare, commit and release", () => {
 describe("facts", () => {
 	it("narrow what a step needs", () => {
 		defineStep({
-			type: "determine-kind",
+			phase: "determine-kind",
 			name: "labels",
 			needs: ["changes.labels", "previousVersion"],
 			run: ({ changes, previousVersion }) => {
@@ -151,7 +153,7 @@ describe("facts", () => {
 			},
 		});
 		defineStep({
-			type: "build-notes",
+			phase: "determine-notes",
 			name: "titles",
 			scope: "all",
 			needs: ["changes.title"],
@@ -166,20 +168,20 @@ describe("facts", () => {
 
 	it("make a step return what it provides", () => {
 		defineStep({
-			type: "read-changes",
+			phase: "read-changes",
 			name: "labeled",
 			provides: ["changes.labels"],
 			run: () => ({ changes: [{ reason: "x", labels: [] }], reason: "x" }),
 		});
 		defineStep({
-			type: "read-changes",
+			phase: "read-changes",
 			name: "unlabeled",
 			provides: ["changes.labels"],
 			// @ts-expect-error every change must have labels
 			run: () => ({ changes: [{ reason: "x" }], reason: "x" }),
 		});
 		defineStep({
-			type: "release",
+			phase: "release",
 			name: "unknown",
 			// @ts-expect-error not a fact
 			needs: ["changes.jira"],
@@ -195,7 +197,7 @@ describe("context", () => {
 			steps: [
 				...presets.conventional(),
 				{
-					type: "release",
+					phase: "release",
 					name: "count",
 					run: ({ context }) => {
 						expectTypeOf(context).toEqualTypeOf<{ count: number }>();
@@ -238,7 +240,7 @@ describe("releases", () => {
 
 describe("step options", () => {
 	const step = defineStep({
-		type: "release",
+		phase: "release",
 		name: "typed",
 		options: {
 			target: z.string(),
@@ -297,6 +299,27 @@ describe("conditions", () => {
 				),
 				when(steps.gitCommit(), ({ components }) => components.length > 0),
 			],
+		});
+	});
+});
+
+describe("step phases", () => {
+	it("may be worked out from options", () => {
+		const step = defineStep({
+			phase: (options) => options.phase,
+			name: "either",
+			options: { phase: z.enum(["write", "release"]) },
+			run: () => ({ output: null, reason: "ran" }),
+		});
+		expectTypeOf(step({ phase: "write" }).phase).toEqualTypeOf<
+			"write" | "release"
+		>();
+		defineStep({
+			// @ts-expect-error: a phase its options don't allow
+			phase: (options) => options.phase,
+			name: "unknown",
+			options: { phase: z.enum(["write", "nope"]) },
+			run: () => ({ output: null, reason: "ran" }),
 		});
 	});
 });

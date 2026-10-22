@@ -16,7 +16,7 @@ const FIELD_SEPARATOR = "\x1f";
  * GitHub, or in GitLab CI, on GitLab.
  */
 export const conventionalReadCommits = defineStep({
-	type: "read-changes",
+	phase: "read-changes",
 	name: "conventional/read-commits",
 	description:
 		"Collects each conventional section (`feat:`, `fix(x)!:` …) of every commit touching the component since the previous release, or in all history without one.",

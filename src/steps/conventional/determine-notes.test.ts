@@ -1,11 +1,11 @@
 import type { Change } from "../../core/types.ts";
 import { change, runStep } from "../../testing/step.ts";
-import { conventionalBuildNotes } from "./build-notes.ts";
+import { conventionalBuildNotes } from "./determine-notes.ts";
 
 const major = { previousVersion: "1.0.0", kind: "breaking", version: "2.0.0" };
 const patch = { previousVersion: "1.0.0", kind: "fix", version: "1.0.1" };
 
-describe("conventional/build-notes", () => {
+describe("conventional/determine-notes", () => {
 	it("groups changes into breaking changes, types and other", async () => {
 		const output = await runStep(conventionalBuildNotes(), {
 			...major,

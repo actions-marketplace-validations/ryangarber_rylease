@@ -25,7 +25,7 @@ class GitLabError extends Error {
  * the project, API and job token come from the job's environment.
  */
 export const gitlabCreateRelease = defineStep({
-	type: "release",
+	phase: "release",
 	name: "gitlab/create-release",
 	description:
 		"Creates a GitLab release of the tag with the notes, unless it already has one; the tag is created at HEAD if it doesn't exist.",

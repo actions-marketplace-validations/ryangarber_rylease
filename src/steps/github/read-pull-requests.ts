@@ -26,7 +26,7 @@ const CONCURRENCY = 8;
  * pull request aren't counted.
  */
 export const githubReadPullRequests = defineStep({
-	type: "read-changes",
+	phase: "read-changes",
 	name: "github/read-pull-requests",
 	description:
 		"Collects the pull requests merged into the branch by the commits touching the component since the previous release, with their labels. Needs a token that can read pull requests.",

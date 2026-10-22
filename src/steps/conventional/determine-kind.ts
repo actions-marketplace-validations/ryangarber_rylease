@@ -10,7 +10,7 @@ const RANK: Record<Kind, number> = { none: 0, fix: 1, feature: 2, breaking: 3 };
  * conventional type, and the highest kind wins.
  */
 export const conventionalDetermineKind = defineStep({
-	type: "determine-kind",
+	phase: "determine-kind",
 	name: "conventional/determine-kind",
 	description:
 		"`!` or `BREAKING` → breaking; otherwise by conventional type (`feat` → feature, anything else → fix). The highest kind wins.",

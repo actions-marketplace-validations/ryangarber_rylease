@@ -26,14 +26,14 @@ const report = (
 	releases: [],
 	records: [
 		{
-			type: "version",
+			phase: "determine-version",
 			name: "semver",
 			status: "ok",
 			durationMs: 0.4,
 			reason: "1.1.0: 'feature' from 1.0.0, bumps minor",
 		},
 		{
-			type: "release",
+			phase: "release",
 			name: "announce",
 			status: "skipped",
 			durationMs: 0,
@@ -53,7 +53,7 @@ describe("markdownSummary", () => {
 				"",
 				"| | Type | Step | Time | |",
 				"|:-:|---|---|--:|---|",
-				"| ✅ | `version` | `semver` | <1ms | 1.1.0: 'feature' from 1.0.0, bumps minor |",
+				"| ✅ | `determine-version` | `semver` | <1ms | 1.1.0: 'feature' from 1.0.0, bumps minor |",
 				"| ⚪ | `release` | `announce` |  | `a \\| b` is false<br>really |",
 				"",
 				"<details open><summary>Release notes</summary>",
@@ -107,7 +107,7 @@ describe("markdownSummary", () => {
 				"",
 				"| | Component | Type | Step | Time | |",
 				"|:-:|---|---|---|--:|---|",
-				"| ✅ | all | `version` | `semver` | <1ms | 1.1.0: 'feature' from 1.0.0, bumps minor |",
+				"| ✅ | all | `determine-version` | `semver` | <1ms | 1.1.0: 'feature' from 1.0.0, bumps minor |",
 			].join("\n"),
 		);
 		expect(summary).toContain("<summary>Release notes of core 1.1.0</summary>");

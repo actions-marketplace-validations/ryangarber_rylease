@@ -14,7 +14,7 @@ beforeAll(async () => {
 		`import { defineStep, definePreset, z } from ${rylease};
 
 export const announce = defineStep({
-	type: "release",
+	phase: "release",
 	name: "announce",
 	options: { channel: z.string() },
 	run: ({ options }) => ({ output: options.channel, reason: "announced" }),
@@ -38,10 +38,10 @@ export const notAStep = () => {};
 		join(pkg, "index.js"),
 		`const factory = (name) =>
 	Object.defineProperties(
-		() => ({ type: "release", name, run: () => ({ output: null, reason: name }) }),
+		() => ({ phase: "release", name, run: () => ({ output: null, reason: name }) }),
 		{
 			kind: { value: "step" },
-			type: { value: "release" },
+			phase: { value: "release" },
 			name: { value: name },
 			options: { value: {} },
 		},
@@ -71,24 +71,24 @@ describe("resolveWorkflowSteps", () => {
 	it("takes bundled steps and presets, with options", async () => {
 		expect(
 			await names([
-				{ uses: "conventional/build-notes" },
+				{ uses: "conventional/determine-notes" },
 				{ uses: "conventional/determine-kind", with: null },
 			]),
-		).toEqual(["conventional/build-notes", "conventional/determine-kind"]);
+		).toEqual(["conventional/determine-notes", "conventional/determine-kind"]);
 		expect(
 			await names([
 				{
 					uses: "conventional",
 					with: {
 						"github/create-release": false,
-						"conventional/build-notes": { links: false },
+						"conventional/determine-notes": { links: false },
 					},
 				},
 			]),
 		).toEqual([
 			"conventional/read-commits",
 			"conventional/determine-kind",
-			"conventional/build-notes",
+			"conventional/determine-notes",
 			"git/create-tag",
 		]);
 	});
@@ -119,7 +119,7 @@ describe("resolveWorkflowSteps", () => {
 		const [step] = await resolveWorkflowSteps(
 			[
 				{
-					uses: "conventional/build-notes",
+					uses: "conventional/determine-notes",
 					if: "!dryRun && startsWith(branch, 'release/')",
 				},
 			],
@@ -146,41 +146,41 @@ describe("resolveWorkflowSteps", () => {
 	});
 
 	it("reports problems with their path", async () => {
-		expect(await problems({ "conventional/build-notes": {} })).toEqual([
+		expect(await problems({ "conventional/determine-notes": {} })).toEqual([
 			"steps: expected a list of steps",
 		]);
-		expect(await problems(["conventional/build-notes"])).toEqual([
+		expect(await problems(["conventional/determine-notes"])).toEqual([
 			"steps[0]: expected a map with 'uses', and optionally 'with' and 'if'",
 		]);
-		expect(await problems([{ "conventional/build-notes": {} }])).toEqual([
-			"steps[0].conventional/build-notes: unknown key; use uses, with, if",
+		expect(await problems([{ "conventional/determine-notes": {} }])).toEqual([
+			"steps[0].conventional/determine-notes: unknown key; use uses, with, if",
 		]);
 		expect(await problems([{ uses: "semver" }])).toEqual([
 			"steps[0].uses: 'semver' is a scheme, not a step; set it as `scheme` instead",
 		]);
 		expect(
-			await problems([{ uses: "conventional/build-notes", with: [] }]),
+			await problems([{ uses: "conventional/determine-notes", with: [] }]),
 		).toEqual(["steps[0].with: expected a map of options"]);
 		expect(
 			await problems([
-				{ uses: "conventional/build-notes" },
-				{ uses: "conventional/build-notes", with: { shift: true } },
+				{ uses: "conventional/determine-notes" },
+				{ uses: "conventional/determine-notes", with: { shift: true } },
 			]),
 		).toEqual(['steps[1].with: Unrecognized key: "shift"']);
 		expect(
 			await problems([
 				{
 					uses: "conventional",
-					with: { "conventional/build-notes": { links: 1 } },
+					with: { "conventional/determine-notes": { links: 1 } },
 				},
 			]),
 		).toEqual([
-			"steps[0].with.conventional/build-notes.links: Invalid input: expected boolean, received number",
+			"steps[0].with.conventional/determine-notes.links: Invalid input: expected boolean, received number",
 		]);
 		expect(
 			await problems([{ uses: "conventional", with: { nope: false } }]),
 		).toEqual([
-			"steps[0].with: 'nope' isn't one of its steps (conventional/read-commits, conventional/determine-kind, conventional/build-notes, git/create-tag, github/create-release)",
+			"steps[0].with: 'nope' isn't one of its steps (conventional/read-commits, conventional/determine-kind, conventional/determine-notes, git/create-tag, github/create-release)",
 		]);
 		expect(await problems([{ uses: "./announce.ts" }])).toEqual([
 			"steps[0].with.channel: Invalid input: expected string, received undefined",
@@ -192,16 +192,20 @@ describe("resolveWorkflowSteps", () => {
 			"steps[0].uses: export 'notAStep' of ./announce.ts isn't made with defineStep, definePreset, defineScheme, defineHistory or defineComponents",
 		]);
 		expect(
-			await problems([{ uses: "conventional/build-notes", if: "version ==" }]),
+			await problems([
+				{ uses: "conventional/determine-notes", if: "version ==" },
+			]),
 		).toEqual(["steps[0].if: unexpected end in `version ==`"]);
 		expect(
-			await problems([{ uses: "conventional/build-notes", if: 1 }]),
+			await problems([{ uses: "conventional/determine-notes", if: 1 }]),
 		).toEqual(["steps[0].if: expected an expression or a boolean"]);
 		expect(await problems([{ uses: "" }])).toEqual([
 			"steps[0].uses: expected the name of a step or preset",
 		]);
 		expect(
-			await problems([{ uses: "conventional/build-notes", if: "github.ref" }]),
+			await problems([
+				{ uses: "conventional/determine-notes", if: "github.ref" },
+			]),
 		).toEqual([
 			expect.stringMatching(
 				/^steps\[0\]\.if: unknown name 'github'; use dryRun, .+ in `github\.ref`$/,

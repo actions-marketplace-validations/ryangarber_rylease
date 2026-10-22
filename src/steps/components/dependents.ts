@@ -11,7 +11,7 @@ const RANK: Record<Kind, number> = { none: 0, fix: 1, feature: 2, breaking: 3 };
  * their dependency on it. Dependents of dependents follow.
  */
 export const componentsDependents = defineStep({
-	type: "determine-kind",
+	phase: "determine-kind",
 	name: "components/dependents",
 	scope: "all",
 	description:

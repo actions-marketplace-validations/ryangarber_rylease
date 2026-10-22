@@ -14,7 +14,7 @@ import {
  * finds the one another job already created.
  */
 export const githubCreateRelease = defineStep({
-	type: "release",
+	phase: "release",
 	name: "github/create-release",
 	description:
 		"Creates a GitHub release of the tag with the notes, unless it already has one; the tag is created at HEAD if it doesn't exist. Needs a token with `contents: write`.",

@@ -73,7 +73,7 @@ function reference(): string {
 			io: "input",
 		}) as Schema;
 		const options = Object.entries(schema.properties ?? {});
-		const heading = `#### \`${step.name}\` · \`${isStep(step) ? step.type : step.kind}\`\n\n${[step.description ?? "", ...(isStep(step) ? contract(step) : [])].join(" ")}`;
+		const heading = `#### \`${step.name}\` · ${isStep(step) ? phase(step) : `\`${step.kind}\``}\n\n${[step.description ?? "", ...(isStep(step) ? contract(step) : [])].join(" ")}`;
 		if (options.length === 0) return `${heading}\n\nNo options.`;
 		const preset = presetDefaults[step.name] ?? {};
 		const rows = options.map(([name, option]) => {
@@ -117,6 +117,18 @@ function isStep(factory: AnyFactory): factory is AnyStepFactory {
 
 function factories(module: object): AnyFactory[] {
 	return (Object.values(module) as unknown[]).filter((item) => isFactory(item));
+}
+
+/** A step's phase, or the phases its `phase` option allows when its options pick it. */
+function phase(step: AnyStepFactory): string {
+	if (typeof step.phase === "string") return `\`${step.phase}\``;
+	const option = step.options.phase;
+	if (!(option instanceof z.ZodEnum)) {
+		throw new Error(
+			`${step.name}: its phase is a function without a phase option`,
+		);
+	}
+	return `\`${option.options.join(" | ")}\``;
 }
 
 /** How a step runs, and its facts, e.g. `Runs once for all components.` */

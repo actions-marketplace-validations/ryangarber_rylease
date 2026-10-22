@@ -1,28 +1,60 @@
-import { defineStep } from "../../core/define.ts";
-import { commandOptions, runCommand, tail } from "./command.ts";
+import { exec } from "../../utils/exec.ts";
+import { inComponent } from "../../utils/files.ts";
+import { fill } from "../../utils/template.ts";
+
+type Command = string | readonly string[];
 
 /**
- * Runs a command to ship the release, e.g. `cargo publish`, `uv publish` or
- * `docker push app:{version}`, for each component.
+ * Runs a step's command for a component, or in a dry run its `dryRun`
+ * command if it has one; resolves with what it ran, and its output.
  */
-export const execRun = defineStep({
-	type: "release",
-	name: "exec/run",
-	description:
-		"Runs a command for each component, with `{placeholders}` filled in, e.g. `cargo publish` or `docker push app:{version}`.",
-	options: commandOptions,
-	run: async (input) => {
-		const { shown, stdout } = await runCommand(input, input.options);
-		if (stdout === null) {
-			return {
-				output: { command: shown, stdout: null },
-				reason: `would run ${shown}`,
-			};
-		}
-		const last = tail(stdout);
-		return {
-			output: { command: shown, stdout },
-			reason: `ran ${shown}${last ? `: ${last}` : ""}`,
-		};
+export async function runCommand(
+	input: {
+		env: { cwd: string; dryRun: boolean };
+		component: { path: string };
+		placeholders: Readonly<Record<string, string>>;
 	},
-});
+	options: {
+		command: Command;
+		dryRun?: Command | undefined;
+		cwd: string;
+		env: Readonly<Record<string, string>>;
+	},
+): Promise<{ shown: string; stdout: string | null }> {
+	const { env, component, placeholders } = input;
+	const command =
+		env.dryRun && options.dryRun !== undefined
+			? options.dryRun
+			: options.command;
+	const argv =
+		typeof command === "string"
+			? ["sh", "-c", fill(command, placeholders)]
+			: command.map((part) => fill(part, placeholders));
+	const shown = typeof command === "string" ? (argv[2] ?? "") : argv.join(" ");
+	if (env.dryRun && options.dryRun === undefined) {
+		return { shown, stdout: null };
+	}
+	const [program = "", ...args] = argv;
+	const stdout = await exec(program, args, {
+		cwd: inComponent(env, component, options.cwd).file,
+		env: {
+			...process.env,
+			...Object.fromEntries(
+				Object.entries(options.env).map(([key, value]) => [
+					key,
+					fill(value, placeholders),
+				]),
+			),
+		},
+	});
+	return { shown, stdout };
+}
+
+/** The last lines of a command's output, for its reason. */
+export function tail(stdout: string, lines = 1): string {
+	const last = stdout
+		.split("\n")
+		.filter((line) => line.trim())
+		.slice(-lines);
+	return last.join(" ").slice(0, 200);
+}

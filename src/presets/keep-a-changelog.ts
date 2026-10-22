@@ -48,7 +48,7 @@ export const keepAChangelog = definePreset({
 				Deprecated: "feature",
 			},
 		},
-		"labels/build-notes": {
+		"labels/determine-notes": {
 			sections: SECTIONS.map((title) => ({ title, labels: [title] })),
 			descriptions: true,
 		},

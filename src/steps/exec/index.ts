@@ -1,2 +1,1 @@
-export * from "./prepare.ts";
-export * from "./run.ts";
+export * from "./command.ts";

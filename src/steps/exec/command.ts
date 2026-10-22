@@ -1,84 +1,66 @@
+import { defineStep } from "../../core/define.ts";
 import { z } from "../../core/options.ts";
-import { exec } from "../../utils/exec.ts";
 import { inComponent } from "../../utils/files.ts";
-import { fill } from "../../utils/template.ts";
-
-/** Options of the `exec/` steps. */
-export const commandOptions = {
-	command: z
-		.union([z.string(), z.array(z.string()).min(1)])
-		.describe(
-			"`{placeholders}` are filled in. Text runs in `sh -c`; a list runs as it is, without a shell.",
-		),
-	dryRun: z
-		.union([z.string(), z.array(z.string()).min(1)])
-		.optional()
-		.describe(
-			"Runs instead in a dry run, e.g. `cargo publish --dry-run`; without it, a dry run only says what it would run.",
-		),
-	cwd: z
-		.string()
-		.default(".")
-		.describe("Where it runs, relative to the component's directory."),
-	env: z
-		.record(z.string(), z.string())
-		.default({})
-		.describe("More environment variables, with `{placeholders}` filled in."),
-};
-
-type Command = string | readonly string[];
+import { runCommand, tail } from "./run.ts";
 
 /**
- * Runs a step's command for a component, or in a dry run its `dryRun`
- * command if it has one; resolves with what it ran, and its output.
+ * Runs a command for each component in the phase it's given: in `write`,
+ * e.g. `cargo update --workspace` to update a lockfile; in `release`, e.g.
+ * `cargo publish` or `docker push app:{version}`.
  */
-export async function runCommand(
-	input: {
-		env: { cwd: string; dryRun: boolean };
-		component: { path: string };
-		placeholders: Readonly<Record<string, string>>;
-	},
+export const execCommand = defineStep({
+	phase: (options) => options.phase,
+	name: "exec/command",
+	description:
+		"Runs a command for each component in its `phase`: `write` e.g. to update a lockfile, listing what it changes as `files`, or `release` e.g. `cargo publish` or `docker push app:{version}`.",
 	options: {
-		command: Command;
-		dryRun?: Command | undefined;
-		cwd: string;
-		env: Readonly<Record<string, string>>;
-	},
-): Promise<{ shown: string; stdout: string | null }> {
-	const { env, component, placeholders } = input;
-	const command =
-		env.dryRun && options.dryRun !== undefined
-			? options.dryRun
-			: options.command;
-	const argv =
-		typeof command === "string"
-			? ["sh", "-c", fill(command, placeholders)]
-			: command.map((part) => fill(part, placeholders));
-	const shown = typeof command === "string" ? (argv[2] ?? "") : argv.join(" ");
-	if (env.dryRun && options.dryRun === undefined) {
-		return { shown, stdout: null };
-	}
-	const [program = "", ...args] = argv;
-	const stdout = await exec(program, args, {
-		cwd: inComponent(env, component, options.cwd).file,
-		env: {
-			...process.env,
-			...Object.fromEntries(
-				Object.entries(options.env).map(([key, value]) => [
-					key,
-					fill(value, placeholders),
-				]),
+		phase: z
+			.enum(["write", "stage", "release"])
+			.describe("The phase it runs in."),
+		command: z
+			.union([z.string(), z.array(z.string()).min(1)])
+			.describe(
+				"`{placeholders}` are filled in. Text runs in `sh -c`; a list runs as it is, without a shell.",
 			),
-		},
-	});
-	return { shown, stdout };
-}
-
-/** The last lines of a command's output, for its reason. */
-export function tail(stdout: string, lines = 1): string {
-	const last = stdout
-		.split("\n")
-		.filter((line) => line.trim())
-		.slice(-lines);
-	return last.join(" ").slice(0, 200);
-}
+		dryRun: z
+			.union([z.string(), z.array(z.string()).min(1)])
+			.optional()
+			.describe(
+				"Runs instead in a dry run, e.g. `cargo publish --dry-run`; without it, a dry run only says what it would run.",
+			),
+		cwd: z
+			.string()
+			.default(".")
+			.describe("Where it runs, relative to the component's directory."),
+		env: z
+			.record(z.string(), z.string())
+			.default({})
+			.describe("More environment variables, with `{placeholders}` filled in."),
+		files: z
+			.array(z.string())
+			.default([])
+			.describe(
+				"What it changes, relative to the component's directory, for `git/commit`.",
+			),
+	},
+	run: async (input) => {
+		const { env, component, options } = input;
+		const files = options.files.map(
+			(file) => inComponent(env, component, file).relative,
+		);
+		const { shown, stdout } = await runCommand(input, options);
+		if (stdout === null) {
+			return {
+				output: { command: shown, stdout: null },
+				files,
+				reason: `would run ${shown}`,
+			};
+		}
+		const last = tail(stdout);
+		return {
+			output: { command: shown, stdout },
+			files,
+			reason: `ran ${shown}${last ? `: ${last}` : ""}`,
+		};
+	},
+});
