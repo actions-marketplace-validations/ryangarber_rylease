@@ -32,6 +32,10 @@ jobs:
       - run: pnpm test
       
       - run: |
+          pnpm build
+          pnpm --filter @rylease/cli build
+      
+      - run: |
           pnpm build:action
           pnpm build:docs
           git diff --exit-code dist/action.mjs README.md

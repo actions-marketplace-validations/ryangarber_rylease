@@ -37,6 +37,7 @@ build/Release
 out
 dist/*
 !dist/action.mjs
+packages/*/dist
 .output
 
 # Package managers

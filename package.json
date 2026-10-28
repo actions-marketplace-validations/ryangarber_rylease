@@ -20,6 +20,16 @@
 				"default": "./dist/index.cjs"
 			}
 		},
+		"./internal": {
+			"import": {
+				"types": "./dist/internal.d.mts",
+				"default": "./dist/internal.mjs"
+			},
+			"require": {
+				"types": "./dist/internal.d.cts",
+				"default": "./dist/internal.cjs"
+			}
+		},
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -28,7 +38,7 @@
 	],
 	"scripts": {
 		"lint": "biome check --write",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p packages/cli",
 		"test": "vitest run",
 		"build": "tsdown",
 		"build:action": "tsdown --filter action",
@@ -52,8 +62,7 @@
 		"knip": "^6.41.0",
 		"tsdown": "^0.23.1",
 		"typescript": "^7.0.2",
-		"vitest": "^5.0.3",
-		"yaml": "^2.9.1"
+		"vitest": "^5.0.3"
 	},
 	"repository": {
 		"url": "https://github.com/ryangarber/rylease.git"
@@ -67,6 +76,7 @@
 		}
 	},
 	"dependencies": {
+		"yaml": "^2.9.1",
 		"zod": "^4.6.7"
 	}
 }

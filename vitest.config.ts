@@ -2,6 +2,13 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
 	test: {
+		projects: [
+			{
+				extends: true,
+				test: { name: "rylease", include: ["src/**/*.test.ts"] },
+			},
+			"packages/cli",
+		],
 		environment: "node",
 		globals: true,
 		typecheck: {
