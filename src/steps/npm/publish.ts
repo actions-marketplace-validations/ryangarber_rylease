@@ -92,7 +92,7 @@ export const npmPublish = defineStep({
 		const current = versionOf(json, manifest);
 		if (current !== version) {
 			throw new Error(
-				`${manifest} is at ${current}, not ${version}; write it first (npm/write-version)`,
+				`${manifest} is at ${current}, not ${version}; write it first (fs/write-version, with format: npm)`,
 			);
 		}
 

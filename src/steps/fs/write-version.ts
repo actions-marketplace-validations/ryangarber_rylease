@@ -9,8 +9,8 @@ import { FORMAT_NAMES, versionFormat } from "./formats.ts";
 
 /**
  * Writes each component's new version to its version file, in the project's
- * own format, keeping everything else as it was. With the `npm` and `cargo`
- * formats, dependencies on the other components released with it are
+ * own format, keeping everything else as it was. With the `npm`, `cargo` and
+ * `dart` formats, dependencies on the other components released with it are
  * pointed at their new versions too, keeping each range's operator.
  */
 export const fsWriteVersion = defineStep({
@@ -18,13 +18,13 @@ export const fsWriteVersion = defineStep({
 	name: "fs/write-version",
 	scope: "all",
 	description:
-		"Writes each component's new version to its version file: `VERSION`, `package.json`, `Cargo.toml`, `pyproject.toml`, `Chart.yaml`, `gradle.properties`, `pom.xml`, or any file by pattern. With `npm` and `cargo`, it also updates dependencies on the other components released with it, and needs `version.semver`.",
+		"Writes each component's new version to its version file: `VERSION`, `package.json`, `Cargo.toml`, `pyproject.toml`, `pubspec.yaml`, a gem's `version.rb`, a `.csproj`, `Chart.yaml`, `gradle.properties`, `pom.xml`, or any file by pattern. With `npm`, `cargo` and `dart`, it also updates dependencies on the other components released with it, and needs `version.semver`; with `dart`, a build number like Flutter's `+3` is incremented.",
 	options: {
 		format: z
 			.enum(FORMAT_NAMES)
 			.default("plain")
 			.describe(
-				"`plain` (the whole file), `npm`, `cargo`, `python`, `helm`, `gradle`, `maven`, or `pattern`.",
+				"`plain` (the whole file), `npm`, `cargo`, `python`, `dart`, `ruby`, `dotnet`, `helm`, `gradle`, `maven`, or `pattern`.",
 			),
 		path: z
 			.union([z.string(), z.array(z.string()).min(1)])
@@ -50,7 +50,8 @@ export const fsWriteVersion = defineStep({
 		if (format.needs?.includes("version.semver")) {
 			for (const { version } of components) {
 				// npm and cargo would "clean" anything else, e.g. publish
-				// 2026.01.0 as 2026.1.0, so the package and its tag would disagree.
+				// 2026.01.0 as 2026.1.0, so the package and its tag would
+				// disagree; pub refuses it.
 				if (!isSemver(version)) {
 					throw new Error(
 						`${format.name} needs a semantic version, and '${version}' isn't one`,
@@ -98,7 +99,7 @@ export const fsWriteVersion = defineStep({
 			if (text === "" && options.format !== "plain") {
 				throw new Error(`${path} doesn't exist`);
 			}
-			let result: { text: string; dependencies: string[] };
+			let result: ReturnType<typeof format.write>;
 			try {
 				result = format.write(text, version, packages);
 			} catch (error) {
@@ -107,7 +108,11 @@ export const fsWriteVersion = defineStep({
 				);
 			}
 			if (!env.dryRun) await writeFile(file, result.text);
-			written.push({ path, version, dependencies: result.dependencies });
+			written.push({
+				path,
+				version: result.version ?? version,
+				dependencies: result.dependencies,
+			});
 		}
 		const described = joinList(
 			written.map(

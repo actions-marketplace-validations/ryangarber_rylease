@@ -1,4 +1,11 @@
 import type { Fact } from "../../core/facts.ts";
+import { tomlKey } from "../../utils/toml.ts";
+import {
+	pubspecField,
+	pubspecVersion,
+	setPubspecVersion,
+	withoutBuildNumber,
+} from "../dart/pubspec.ts";
 import { setPackageJsonVersion, withOperator } from "../npm/package-json.ts";
 
 /**
@@ -14,13 +21,15 @@ export interface VersionFormat {
 	read(text: string): string | undefined;
 	/**
 	 * The text with the new version; dependencies on the given packages, by
-	 * name, are pointed at theirs where the format knows how.
+	 * name, are pointed at theirs where the format knows how. `version` is
+	 * the version as written, when that's not the one given, e.g. with a
+	 * build number.
 	 */
 	write(
 		text: string,
 		version: string,
 		packages: ReadonlyMap<string, string>,
-	): { text: string; dependencies: string[] };
+	): { text: string; dependencies: string[]; version?: string };
 	/** The package's name, for other packages' dependencies on it. */
 	packageName?(text: string): string | undefined;
 }
@@ -30,6 +39,9 @@ export const FORMAT_NAMES = [
 	"npm",
 	"cargo",
 	"python",
+	"dart",
+	"ruby",
+	"dotnet",
 	"helm",
 	"gradle",
 	"maven",
@@ -52,6 +64,12 @@ export function versionFormat(
 			return cargo;
 		case "python":
 			return python;
+		case "dart":
+			return dart;
+		case "ruby":
+			return ruby;
+		case "dotnet":
+			return dotnet;
 		case "helm":
 			return helm;
 		case "gradle":
@@ -103,42 +121,6 @@ function parseJson(text: string): Record<string, unknown> | undefined {
 	} catch {
 		return undefined;
 	}
-}
-
-/** `key = "value"` in the first of the TOML tables that has it. */
-function tomlKey(tables: readonly string[], key: string) {
-	const find = (text: string) => {
-		const lines = text.split("\n");
-		for (const table of tables) {
-			let inside = false;
-			for (const [index, line] of lines.entries()) {
-				const header = /^\s*\[([^[\]]+)\]\s*(#.*)?$/.exec(line);
-				if (header) {
-					inside = header[1]?.trim() === table;
-					continue;
-				}
-				if (/^\s*\[\[/.test(line)) {
-					inside = false;
-					continue;
-				}
-				const match = new RegExp(
-					`^(\\s*${key}\\s*=\\s*)(["'])([^"']*)\\2(.*)$`,
-				).exec(line);
-				if (inside && match) return { lines, index, match };
-			}
-		}
-		return undefined;
-	};
-	return {
-		read: (text: string) => find(text)?.match[3],
-		write: (text: string, value: string) => {
-			const found = find(text);
-			if (!found) return undefined;
-			const [, before, quote, , after] = found.match;
-			found.lines[found.index] = `${before}${quote}${value}${quote}${after}`;
-			return found.lines.join("\n");
-		},
-	};
 }
 
 const CARGO_TABLES = [
@@ -198,6 +180,18 @@ const python: VersionFormat = {
 	},
 };
 
+const dart: VersionFormat = {
+	name: "dart",
+	path: "pubspec.yaml",
+	needs: ["version.semver"],
+	read: (text) => {
+		const version = pubspecVersion(text);
+		return version === undefined ? undefined : withoutBuildNumber(version);
+	},
+	write: setPubspecVersion,
+	packageName: (text) => pubspecField(text, "name"),
+};
+
 /** A top-level `key: value` line, e.g. in YAML or a properties file. */
 function lineKey(name: string, path: string, pattern: RegExp): VersionFormat {
 	return {
@@ -229,44 +223,78 @@ const gradle = lineKey(
 	/^(\s*version\s*[=:]\s*)()([^\s#]+)()$/m,
 );
 
-/** The project's own `<version>`: the one directly in `<project>`. */
-function mavenVersion(
+const ruby = lineKey(
+	"ruby",
+	"lib/**/version.rb",
+	/^(\s*VERSION\s*=\s*)(["'])([^"'\s]+)\2(.*)$/m,
+);
+
+/**
+ * Where the text of the first element `wanted` picks is, given its name and
+ * the names of the elements it's in, outermost first.
+ */
+function xmlElement(
 	text: string,
+	wanted: (name: string, parents: readonly string[]) => boolean,
 ): { start: number; end: number } | undefined {
 	const tags = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<(\/?)([\w.:-]+)[^>]*?(\/?)>/g;
-	let depth = 0;
+	const parents: string[] = [];
 	let open: number | undefined;
 	for (const match of text.matchAll(tags)) {
 		const [whole, closing, name, selfClosing] = match;
 		if (name === undefined || selfClosing) continue;
 		if (closing) {
-			depth--;
-			if (name === "version" && depth === 1 && open !== undefined) {
+			parents.pop();
+			if (open !== undefined && wanted(name, parents)) {
 				return { start: open, end: match.index };
 			}
 			continue;
 		}
-		if (name === "version" && depth === 1) open = match.index + whole.length;
-		depth++;
+		if (wanted(name, parents)) open = match.index + whole.length;
+		parents.push(name);
 	}
 	return undefined;
 }
 
-const maven: VersionFormat = {
-	name: "maven",
-	path: "pom.xml",
-	read: (text) => {
-		const found = mavenVersion(text);
-		return found ? text.slice(found.start, found.end).trim() : undefined;
-	},
-	write: (text, version) => {
-		const found = mavenVersion(text);
-		if (!found) throw new Error("it has no project <version>");
-		return unchanged(
-			`${text.slice(0, found.start)}${version}${text.slice(found.end)}`,
-		);
-	},
-};
+/** The text of an XML element, e.g. a project's `<version>`. */
+function xmlKey(
+	name: string,
+	path: string,
+	element: string,
+	wanted: (name: string, parents: readonly string[]) => boolean,
+): VersionFormat {
+	return {
+		name,
+		path,
+		read: (text) => {
+			const found = xmlElement(text, wanted);
+			return found ? text.slice(found.start, found.end).trim() : undefined;
+		},
+		write: (text, version) => {
+			const found = xmlElement(text, wanted);
+			if (!found) throw new Error(`it has no ${element}`);
+			return unchanged(
+				`${text.slice(0, found.start)}${version}${text.slice(found.end)}`,
+			);
+		},
+	};
+}
+
+/** The project's own `<version>`: the one directly in `<project>`. */
+const maven = xmlKey(
+	"maven",
+	"pom.xml",
+	"project <version>",
+	(name, parents) => name === "version" && parents.length === 1,
+);
+
+/** A `<Version>` property, not a package reference's. */
+const dotnet = xmlKey(
+	"dotnet",
+	"*.csproj",
+	"<Version> property",
+	(name, parents) => name === "Version" && parents.at(-1) === "PropertyGroup",
+);
 
 /**
  * Versions wherever a template matches, e.g. `__version__ = "{version}"`;

@@ -7,7 +7,7 @@ const RANK: Record<Kind, number> = { none: 0, fix: 1, feature: 2, breaking: 3 };
 
 /**
  * Releases the components that depend on a released component, so their
- * releases pick up the new version, e.g. with `npm/write-version` updating
+ * releases pick up the new version, e.g. with `fs/write-version` updating
  * their dependency on it. Dependents of dependents follow.
  */
 export const componentsDependents = defineStep({

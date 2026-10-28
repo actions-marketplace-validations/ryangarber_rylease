@@ -99,3 +99,33 @@ describe("fs/version-file, with the npm format", () => {
 		);
 	});
 });
+
+describe("fs/version-file, with a glob", () => {
+	it("reads the one file the format's glob matches", async () => {
+		await mkdir(join(repo.cwd, "lib", "demo"), { recursive: true });
+		await repo.commit("chore: gem", {
+			"lib/demo/version.rb": 'module Demo\n  VERSION = "2.1.0"\nend\n',
+		});
+		const set = await git(repo.cwd, "rev-parse", "HEAD");
+		expect(await read({ format: "ruby" })).toEqual({
+			version: "2.1.0",
+			ref: set,
+			reason: `2.1.0 in lib/demo/version.rb, set in ${set.slice(0, 7)}`,
+		});
+	});
+
+	it("needs it to match one file", async () => {
+		for (const name of ["a", "b"]) {
+			await writeFile(
+				join(repo.cwd, `${name}.csproj`),
+				"<Project><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>",
+			);
+		}
+		await expect(read({ format: "dotnet" })).rejects.toThrow(
+			"'*.csproj' matches 2 files; set `path` to one",
+		);
+		await expect(read({ format: "dotnet", path: "a.csproj" })).resolves.toEqual(
+			{ version: "1.0.0", reason: "1.0.0 in a.csproj, not in git history" },
+		);
+	});
+});
