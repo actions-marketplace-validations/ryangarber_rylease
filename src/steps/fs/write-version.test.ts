@@ -143,9 +143,28 @@ describe("fs/write-version", () => {
 		).rejects.toThrow("the pattern format needs a `pattern`");
 	});
 
-	it("needs semantic versions for npm and cargo", () => {
+	it("reports the version as written, with a Flutter app's build number", async () => {
+		await writeFile(
+			join(cwd, "pubspec.yaml"),
+			"name: app\npublish_to: none\nversion: 0.1.0+7\n",
+		);
+		const output = await runStep(
+			fsWriteVersion({ format: "dart" }),
+			released("0.2.0"),
+			{ cwd },
+		);
+		expect(output.output).toEqual({
+			written: [{ path: "pubspec.yaml", version: "0.2.0+8", dependencies: [] }],
+		});
+		expect(output.reason).toBe("wrote 0.2.0+8 to pubspec.yaml");
+	});
+
+	it("needs semantic versions for npm, cargo and dart", () => {
 		expect(fsWriteVersion({ format: "npm" }).needs).toEqual(["version.semver"]);
 		expect(fsWriteVersion({ format: "cargo" }).needs).toEqual([
+			"version.semver",
+		]);
+		expect(fsWriteVersion({ format: "dart" }).needs).toEqual([
 			"version.semver",
 		]);
 		expect(fsWriteVersion({ format: "python" }).needs).toBeUndefined();

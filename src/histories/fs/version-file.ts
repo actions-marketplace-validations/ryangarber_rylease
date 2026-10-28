@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { defineHistory } from "../../core/history.ts";
 import { z } from "../../core/options.ts";
 import { FORMAT_NAMES, versionFormat } from "../../steps/fs/formats.ts";
+import { resolveFiles } from "../../utils/files.ts";
 import { findVersionCommit } from "../../utils/git.ts";
 
 /**
@@ -24,7 +25,7 @@ export const fsVersionFile = defineHistory({
 			.string()
 			.optional()
 			.describe(
-				"Relative to the component's directory; defaults to the format's file.",
+				"Relative to the component's directory; defaults to the format's file. A glob must match one file.",
 			),
 		pattern: z
 			.string()
@@ -39,10 +40,11 @@ export const fsVersionFile = defineHistory({
 			name: "fs/version-file",
 			find: async ({ env, component }) => {
 				const dir = join(env.cwd, component.path);
-				const shown = join(component.path, path).replaceAll("\\", "/");
-				const version = format.read(await readFile(join(dir, path), "utf8"));
+				const file = await oneFile(dir, path);
+				const shown = join(component.path, file).replaceAll("\\", "/");
+				const version = format.read(await readFile(join(dir, file), "utf8"));
 				if (version === undefined) throw new Error(`${shown} has no version`);
-				const ref = await findVersionCommit(dir, path, version, format.read);
+				const ref = await findVersionCommit(dir, file, version, format.read);
 				return {
 					version,
 					...(ref && { ref }),
@@ -54,3 +56,18 @@ export const fsVersionFile = defineHistory({
 		};
 	},
 });
+
+/**
+ * The file a path names, relative to `dir`; a glob, like `*.csproj`, must
+ * match one.
+ */
+async function oneFile(dir: string, path: string): Promise<string> {
+	if (!/[*?[{]/.test(path)) return path;
+	const [file, ...others] = await resolveFiles(dir, [path]);
+	if (file === undefined || others.length > 0) {
+		throw new Error(
+			`'${path}' matches ${others.length + 1} files; set \`path\` to one`,
+		);
+	}
+	return relative(dir, file).replaceAll("\\", "/");
+}

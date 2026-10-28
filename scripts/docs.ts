@@ -1,14 +1,19 @@
 /**
- * Generates the options reference of the bundled steps in README.md from their
- * definitions. Run with `pnpm build:docs`; `--check` fails if README.md is stale.
+ * Generates the reference of the bundled steps, schemes, histories and
+ * component sources in docs/reference/ from their definitions: a page each,
+ * e.g. docs/reference/npm/publish.md, and an index. Run with
+ * `pnpm build:docs`; `--check` fails if any page is stale.
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as components from "../src/components/index.ts";
-import type { AnyStepFactory } from "../src/core/define.ts";
+import type { AnyStepFactory, Preset } from "../src/core/define.ts";
 import { type AnyFactory, isFactory } from "../src/core/factory.ts";
 import { z } from "../src/core/options.ts";
+import { PHASES } from "../src/core/types.ts";
 import * as histories from "../src/histories/index.ts";
-import { conventional } from "../src/presets/index.ts";
+import * as presets from "../src/presets/index.ts";
 import * as schemes from "../src/schemes/index.ts";
 import * as steps from "../src/steps/index.ts";
 
@@ -25,9 +30,8 @@ interface Schema {
 	description?: string;
 }
 
-const README = new URL("../README.md", import.meta.url);
-const START = "<!-- options:start -->";
-const END = "<!-- options:end -->";
+const ROOT = fileURLToPath(new URL("../docs/reference/", import.meta.url));
+const INDEX = "README.md";
 
 function typeOf(schema: Schema): string {
 	if (schema.anyOf) return schema.anyOf.map(typeOf).join(" \\| ");
@@ -62,73 +66,149 @@ function flow(value: unknown): string {
 	return String(value);
 }
 
-function reference(): string {
-	const others = Object.values(steps).filter(
-		(step) => !conventional.steps.some((other) => other.name === step.name),
-	);
-	const presetDefaults: Record<string, Record<string, unknown> | undefined> =
-		conventional.defaults;
-	const section = (step: AnyFactory) => {
-		const schema = z.toJSONSchema(z.object(step.options), {
-			io: "input",
-		}) as Schema;
-		const options = Object.entries(schema.properties ?? {});
-		const heading = `#### \`${step.name}\` · ${isStep(step) ? phase(step) : `\`${step.kind}\``}\n\n${[step.description ?? "", ...(isStep(step) ? contract(step) : [])].join(" ")}`;
-		if (options.length === 0) return `${heading}\n\nNo options.`;
-		const preset = presetDefaults[step.name] ?? {};
-		const rows = options.map(([name, option]) => {
-			const own =
+/** Where a factory's page is, relative to docs/reference/. */
+function pathOf(factory: AnyFactory): string {
+	return `${factory.name}.md`;
+}
+
+/** A link from one page of docs/reference/ to another. */
+function link(from: string, to: string): string {
+	return relative(dirname(join(ROOT, from)), join(ROOT, to));
+}
+
+const KINDS: Record<string, string> = {
+	scheme: "Scheme: set it as the release's `scheme`.",
+	history: "History: set it as the release's `history`.",
+	components: "Components: set it as the release's `components`.",
+};
+
+function page(factory: AnyFactory): string {
+	const path = pathOf(factory);
+	const schema = z.toJSONSchema(z.object(factory.options), {
+		io: "input",
+	}) as Schema;
+	const options = Object.entries(schema.properties ?? {});
+	const lines = [
+		`# \`${factory.name}\``,
+		"",
+		isStep(factory)
+			? `Step, in ${phase(factory)}.`
+			: (KINDS[factory.kind] ?? ""),
+		"",
+		[factory.description ?? "", ...(isStep(factory) ? contract(factory) : [])]
+			.join(" ")
+			.trim(),
+		"",
+		"## Options",
+		"",
+	];
+	if (options.length === 0) {
+		lines.push("No options.");
+	} else {
+		lines.push("| Option | Type | Default | |", "|---|---|---|---|");
+		for (const [name, option] of options) {
+			const fallback =
 				option.default !== undefined
 					? `\`${flow(option.default)}\``
 					: schema.required?.includes(name)
 						? "required"
 						: "";
-			const fallback =
-				name in preset
-					? `\`${flow(preset[name])}\` in \`conventional\`, ${own || "none"} on its own`
-					: own;
-			return `| \`${name}\` | \`${typeOf(option)}\` | ${fallback} | ${option.description ?? ""} |`;
-		});
-		return [
-			heading,
-			"",
-			"| Option | Type | Default | |",
-			"|---|---|---|---|",
-			...rows,
-		].join("\n");
-	};
-	const sections = [
-		...conventional.steps.map(section),
-		"### More steps\n\nThese aren't in `conventional`; list them with it, or in its place: see [Other sources and schemes](#other-sources-and-schemes). Steps run by phase, so they can be listed in any order; steps of the same phase run in the order given.",
-		...others.map(section),
-		"### Bundled schemes\n\nSet one as the release's `scheme`; see [Schemes](#schemes).",
-		...factories(schemes).map(section),
-		"### Bundled sources\n\nWhere previous releases are found, set as `history`, and what's released, set as `components`.",
-		...factories(histories).map(section),
-		"### Bundled components\n\nWhere components are found, set as `components`.",
-		...factories(components).map(section),
+			lines.push(
+				`| \`${name}\` | \`${typeOf(option)}\` | ${fallback} | ${option.description ?? ""} |`,
+			);
+		}
+	}
+	if (isStep(factory)) {
+		const including = presetList().filter((preset) =>
+			preset.steps.some((step) => step.name === factory.name),
+		);
+		if (including.length > 0) {
+			lines.push("", "## In presets", "");
+			for (const preset of including) {
+				const defaults = (
+					preset.defaults as Record<string, object | undefined>
+				)[factory.name];
+				lines.push(
+					`- \`${preset.name}\`${defaults ? `, with \`${flow(defaults)}\`` : ""}`,
+				);
+			}
+		}
+	}
+	lines.push("", `[All steps, schemes and sources](${link(path, INDEX)})`);
+	return `${lines.join("\n")}\n`;
+}
+
+function index(): string {
+	const row = (factory: AnyFactory) =>
+		`| [\`${factory.name}\`](${pathOf(factory)}) | ${(factory.description ?? "").replaceAll("\n", " ")} |`;
+	const table = (heading: string, intro: string, list: AnyFactory[]) => [
+		`## ${heading}`,
+		"",
+		intro,
+		"",
+		"| Name | |",
+		"|---|---|",
+		...list.map(row),
+		"",
 	];
-	return `${START}\n${sections.join("\n\n")}\n${END}`;
+	const stepList = factories(steps, "step") as AnyStepFactory[];
+	const byPhase = (step: AnyStepFactory) =>
+		typeof step.phase === "string"
+			? PHASES.indexOf(step.phase)
+			: Number.POSITIVE_INFINITY;
+	const sorted = [...stepList].sort((a, b) => byPhase(a) - byPhase(b));
+	return [
+		"# Reference",
+		"",
+		"Generated from the definitions by `pnpm build:docs`. For how they fit together, see the [README](../../README.md).",
+		"",
+		...table(
+			"Steps",
+			"Listed in `steps`, in any order; they run by phase.",
+			sorted,
+		),
+		...table("Schemes", "Set as the release's `scheme`.", factories(schemes)),
+		...table(
+			"Histories",
+			"Set as the release's `history`: where the previous release is found.",
+			factories(histories),
+		),
+		...table(
+			"Components",
+			"Set as the release's `components`: what's versioned, in a monorepo.",
+			factories(components),
+		),
+	]
+		.join("\n")
+		.trimEnd()
+		.concat("\n");
 }
 
 function isStep(factory: AnyFactory): factory is AnyStepFactory {
 	return factory.kind === "step";
 }
 
-function factories(module: object): AnyFactory[] {
-	return (Object.values(module) as unknown[]).filter((item) => isFactory(item));
+function factories(module: object, kind?: AnyFactory["kind"]): AnyFactory[] {
+	return (Object.values(module) as unknown[]).filter((item) =>
+		isFactory(item, kind),
+	);
+}
+
+function presetList(): Preset[] {
+	return factories(presets, "preset") as unknown as Preset[];
 }
 
 /** A step's phase, or the phases its `phase` option allows when its options pick it. */
 function phase(step: AnyStepFactory): string {
-	if (typeof step.phase === "string") return `\`${step.phase}\``;
+	if (typeof step.phase === "string") return `the \`${step.phase}\` phase`;
 	const option = step.options.phase;
 	if (!(option instanceof z.ZodEnum)) {
 		throw new Error(
 			`${step.name}: its phase is a function without a phase option`,
 		);
 	}
-	return `\`${option.options.join(" | ")}\``;
+	const names = option.options.map((name) => `\`${name}\``);
+	return `the ${names.slice(0, -1).join(", ")} or ${names.at(-1)} phase, as its \`phase\` option picks`;
 }
 
 /** How a step runs, and its facts, e.g. `Runs once for all components.` */
@@ -142,18 +222,47 @@ function contract(step: AnyStepFactory): string[] {
 	];
 }
 
-const readme = await readFile(README, "utf8");
-const start = readme.indexOf(START);
-const end = readme.indexOf(END);
-if (start === -1 || end === -1) throw new Error(`README.md has no ${START}`);
-const updated =
-	readme.slice(0, start) + reference() + readme.slice(end + END.length);
+async function existing(directory: string): Promise<string[]> {
+	const entries = await readdir(directory, {
+		recursive: true,
+		withFileTypes: true,
+	}).catch(() => []);
+	return entries
+		.filter((entry) => entry.isFile())
+		.map((entry) => relative(directory, join(entry.parentPath, entry.name)));
+}
+
+const pages = new Map<string, string>([[INDEX, index()]]);
+for (const factory of [
+	...factories(steps, "step"),
+	...factories(schemes),
+	...factories(histories),
+	...factories(components),
+]) {
+	const path = pathOf(factory);
+	if (pages.has(path)) throw new Error(`two pages for ${factory.name}`);
+	pages.set(path, page(factory));
+}
 
 if (process.argv.includes("--check")) {
-	if (updated !== readme) {
-		console.error("README.md is out of date; run `pnpm build:docs`");
+	const stale: string[] = [];
+	for (const [path, content] of pages) {
+		const current = await readFile(join(ROOT, path), "utf8").catch(() => null);
+		if (current !== content) stale.push(path);
+	}
+	for (const path of await existing(ROOT)) {
+		if (!pages.has(path)) stale.push(path);
+	}
+	if (stale.length > 0) {
+		console.error(
+			`docs/reference is out of date (${stale.join(", ")}); run \`pnpm build:docs\``,
+		);
 		process.exitCode = 1;
 	}
 } else {
-	await writeFile(README, updated);
+	await rm(ROOT, { recursive: true, force: true });
+	for (const [path, content] of pages) {
+		await mkdir(dirname(join(ROOT, path)), { recursive: true });
+		await writeFile(join(ROOT, path), content);
+	}
 }

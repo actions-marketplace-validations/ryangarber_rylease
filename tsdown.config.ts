@@ -3,7 +3,7 @@ import { defineConfig } from "tsdown";
 export default defineConfig([
 	{
 		name: "library",
-		entry: ["src/index.ts"],
+		entry: ["src/index.ts", "src/internal.ts"],
 		format: ["esm", "cjs"],
 		platform: "node",
 		dts: {
@@ -16,16 +16,12 @@ export default defineConfig([
 		},
 	},
 	{
-		// The CLI: one self-contained file, like the action, run as `rylease`.
+		// `rylease`: runs @rylease/cli with this package as its engine.
 		name: "cli",
 		entry: { cli: "src/cli.ts" },
 		format: ["esm"],
 		platform: "node",
 		target: "node24",
-		deps: {
-			alwaysBundle: ["yaml", "zod"],
-			onlyBundle: false,
-		},
 		dts: false,
 		sourcemap: false,
 		clean: false,

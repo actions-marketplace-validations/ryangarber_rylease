@@ -1,0 +1,10 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"paths": {
+			"rylease": ["../../src/index.ts"],
+			"rylease/internal": ["../../src/internal.ts"]
+		}
+	},
+	"include": ["src"]
+}

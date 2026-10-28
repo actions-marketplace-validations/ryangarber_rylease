@@ -1,8 +1,11 @@
 {
 	"name": "rylease",
-	"version": "3.0.0",
+	"version": "3.1.0",
 	"type": "module",
 	"description": "A release pipeline that doesn't fight you.",
+	"publishConfig": {
+		"access": "public"
+	},
 	"main": "./dist/index.cjs",
 	"bin": {
 		"rylease": "./dist/cli.mjs"
@@ -20,6 +23,16 @@
 				"default": "./dist/index.cjs"
 			}
 		},
+		"./internal": {
+			"import": {
+				"types": "./dist/internal.d.mts",
+				"default": "./dist/internal.mjs"
+			},
+			"require": {
+				"types": "./dist/internal.d.cts",
+				"default": "./dist/internal.cjs"
+			}
+		},
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -28,11 +41,12 @@
 	],
 	"scripts": {
 		"lint": "biome check --write",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p packages/cli",
 		"test": "vitest run",
 		"build": "tsdown",
 		"build:action": "tsdown --filter action",
-		"build:docs": "node scripts/docs.ts"
+		"build:docs": "node scripts/docs.ts",
+		"prepublishOnly": "pnpm build"
 	},
 	"keywords": [
 		"github",
@@ -52,8 +66,7 @@
 		"knip": "^6.41.0",
 		"tsdown": "^0.23.1",
 		"typescript": "^7.0.2",
-		"vitest": "^5.0.3",
-		"yaml": "^2.9.1"
+		"vitest": "^5.0.3"
 	},
 	"repository": {
 		"url": "https://github.com/ryangarber/rylease.git"
@@ -67,6 +80,7 @@
 		}
 	},
 	"dependencies": {
+		"yaml": "^2.9.1",
 		"zod": "^4.6.7"
 	}
 }

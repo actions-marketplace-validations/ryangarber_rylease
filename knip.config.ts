@@ -4,6 +4,7 @@ export default {
 	tags: ["-lintignore"],
 	workspaces: {
 		".": {},
+		"packages/cli": {},
 	},
 	ignore: ["**/dist/**"],
 } satisfies KnipConfig;
