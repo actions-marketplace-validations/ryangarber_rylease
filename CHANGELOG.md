@@ -1,3 +1,14 @@
+## v3.1.0 (2026-10-28)
+
+### Features
+
+- python, rust, .net, dart publishing ([74059ce](https://github.com/ryangarber/rylease/commit/74059ce78800f5e516669a9d12ccfd24d5f9a8d7))
+- improved cli testing, diagnostics ([44f8418](https://github.com/ryangarber/rylease/commit/44f84189e82c674fee0f181f1489cd1b695cfac2))
+
+### Other
+
+- publish to npm ([7a7fa2d](https://github.com/ryangarber/rylease/commit/7a7fa2de8b712709b783ac0a52444ba9d6aa4f5a))
+
 ## v3.0.0 (2026-10-21)
 
 ### Breaking Changes
