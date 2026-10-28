@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # trusted publishing to npm
 
 concurrency:
   # Under workflow_run, github.ref is always the default branch.
@@ -34,9 +35,18 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
           fetch-depth: 0
 
+      # Installs dependencies, for npm/publish's prepublishOnly builds.
+      - uses: pnpm/setup@v3
+        with:
+          cache: true
+
       - uses: ./
         with:
           dry-run: ${{ env.DRY_RUN }}
+          # `npx rylease` is rylease's shim, which runs @rylease/cli.
+          components: |
+            - { name: rylease, path: ., tag: "v{version}" }
+            - { name: "@rylease/cli", path: packages/cli, dependsOn: [rylease] }
           history: "[git/tags, { uses: fs/version-file, with: { format: npm } }]"
           steps: |
             - uses: fs/write-version
@@ -44,5 +54,13 @@ jobs:
             - uses: fs/write-changes
             - uses: git/commit
             - uses: conventional
+            # A new major of rylease is out of the CLI's range for it.
+            - uses: components/dependents
+              with: { on: [breaking] }
+            # The action's floating tag, e.g. v3; not the CLI's.
+            - uses: exec/command
+              if: component.name == 'rylease' && channel == null
               with:
-                git/create-tag: { move: ["v{major}"] }
+                phase: release
+                command: git tag -f v{major} && git push -f origin v{major}
+            - uses: npm/publish

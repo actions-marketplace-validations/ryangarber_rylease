@@ -4,9 +4,15 @@ import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { version as cliVersion } from "../packages/cli/package.json" with {
+	type: "json",
+};
 
-/** The @rylease/cli versions npx runs when the project hasn't installed it. */
-const CLI_RANGE = "^0.1.0";
+/**
+ * The @rylease/cli versions npx runs when the project hasn't installed it:
+ * those compatible with the one in this repository, inlined at build time.
+ */
+const CLI_RANGE = `^${cliVersion}`;
 
 /** This package's root: @rylease/cli runs releases with it, whichever CLI runs. */
 const ENGINE = fileURLToPath(new URL("..", import.meta.url));

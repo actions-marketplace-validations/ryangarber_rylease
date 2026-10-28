@@ -3,6 +3,9 @@
 	"version": "3.0.0",
 	"type": "module",
 	"description": "A release pipeline that doesn't fight you.",
+	"publishConfig": {
+		"access": "public"
+	},
 	"main": "./dist/index.cjs",
 	"bin": {
 		"rylease": "./dist/cli.mjs"
@@ -42,7 +45,8 @@
 		"test": "vitest run",
 		"build": "tsdown",
 		"build:action": "tsdown --filter action",
-		"build:docs": "node scripts/docs.ts"
+		"build:docs": "node scripts/docs.ts",
+		"prepublishOnly": "pnpm build"
 	},
 	"keywords": [
 		"github",

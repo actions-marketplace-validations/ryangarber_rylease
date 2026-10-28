@@ -3,6 +3,9 @@
 	"version": "0.1.0",
 	"type": "module",
 	"description": "rylease's CLI: release, write change files, and test release workflows locally.",
+	"publishConfig": {
+		"access": "public"
+	},
 	"bin": {
 		"rylease": "./dist/bin.mjs"
 	},
@@ -19,7 +22,8 @@
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
-		"build": "tsdown"
+		"build": "tsdown",
+		"prepublishOnly": "pnpm build"
 	},
 	"author": "Ryan Garber <ryanmichaelgarber@gmail.com>",
 	"license": "MIT",
@@ -35,7 +39,7 @@
 		"yaml": "^2.9.1"
 	},
 	"peerDependencies": {
-		"rylease": "^2.0.0"
+		"rylease": "^3.0.0"
 	},
 	"peerDependenciesMeta": {
 		"rylease": {
