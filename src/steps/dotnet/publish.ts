@@ -38,6 +38,12 @@ export const dotnetPublish = defineStep({
 			.describe(
 				"Globs of the packages, relative to the component's directory; those of other versions, and symbol packages, are left out.",
 			),
+		allowNoMatch: z
+			.boolean()
+			.default(false)
+			.describe(
+				"Push nothing, instead of failing, when there are no packages of the version, e.g. in a job that doesn't pack them.",
+			),
 		source: z.string().default(NUGET),
 		token: z
 			.string()
@@ -50,12 +56,12 @@ export const dotnetPublish = defineStep({
 		const dir = inComponent(env, component, ".").file;
 		const patterns = [options.files].flat();
 		// In a dry run, they may not be packed yet, from files not yet written.
-		const resolved = await resolveFiles(dir, patterns).catch(
-			(error: unknown) => {
-				if (env.dryRun) return [];
-				throw error;
-			},
-		);
+		const resolved = await resolveFiles(dir, patterns, {
+			allowNoMatch: options.allowNoMatch,
+		}).catch((error: unknown) => {
+			if (env.dryRun) return [];
+			throw error;
+		});
 		const all = resolved.filter(
 			(file) => file.endsWith(".nupkg") && !file.endsWith(".symbols.nupkg"),
 		);
@@ -67,6 +73,12 @@ export const dotnetPublish = defineStep({
 			return {
 				output: { files: [], source: options.source, published: false },
 				reason: `would push the packages of ${nugetVersion(version)} in ${patterns.join(", ")} to ${options.source}, once packed`,
+			};
+		}
+		if (files.length === 0 && options.allowNoMatch) {
+			return {
+				output: { files: [], source: options.source, published: false },
+				reason: `no packages of ${nugetVersion(version)} in ${patterns.join(", ")}; pushed nothing`,
 			};
 		}
 		if (files.length === 0) {

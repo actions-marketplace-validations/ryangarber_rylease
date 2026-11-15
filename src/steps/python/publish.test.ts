@@ -103,6 +103,17 @@ describe("python/publish", () => {
 		);
 		expect(await commands.calls()).toEqual([]);
 	});
+
+	it("publishes nothing without distributions of the version, with allowNoMatch", async () => {
+		for (const files of ["dist/*", "missing/*"]) {
+			const output = await run("2.0.0", { files, allowNoMatch: true });
+			expect(output.reason).toBe(
+				`no distributions of 2.0.0 in ${files}; published nothing`,
+			);
+			expect(output.output).toMatchObject({ files: [], published: false });
+		}
+		expect(await commands.calls()).toEqual([]);
+	});
 });
 
 describe("normalizePython", () => {

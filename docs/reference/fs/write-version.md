@@ -10,6 +10,7 @@ Writes each component's new version to its version file: `VERSION`, `package.jso
 |---|---|---|---|
 | `format` | `plain \| npm \| cargo \| python \| dart \| ruby \| dotnet \| helm \| gradle \| maven \| pattern` | `plain` | `plain` (the whole file), `npm`, `cargo`, `python`, `dart`, `ruby`, `dotnet`, `helm`, `gradle`, `maven`, or `pattern`. |
 | `path` | `string \| string[]` |  | Relative to each component's directory; globs, or a list, write several, e.g. `packages/*/package.json` for packages sharing a version. Defaults to the format's file. |
+| `allowNoMatch` | `boolean` | `false` | Skip globs that match no files instead of failing; with none matched, write nothing. Not for the `plain` format, which creates its file. |
 | `pattern` | `string` |  | With the `pattern` format, where the version is, e.g. `__version__ = "{version}"`. |
 
 [All steps, schemes and sources](../README.md)

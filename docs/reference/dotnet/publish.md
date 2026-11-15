@@ -9,6 +9,7 @@ Pushes the component's packed `.nupkg` packages of the release's version to nuge
 | Option | Type | Default | |
 |---|---|---|---|
 | `files` | `string \| string[]` | `**/*.nupkg` | Globs of the packages, relative to the component's directory; those of other versions, and symbol packages, are left out. |
+| `allowNoMatch` | `boolean` | `false` | Push nothing, instead of failing, when there are no packages of the version, e.g. in a job that doesn't pack them. |
 | `source` | `string` | `https://api.nuget.org/v3/index.json` |  |
 | `token` | `string` |  | The API key; defaults to `NUGET_API_KEY`. Without one, the source's credentials in NuGet's config are used. |
 

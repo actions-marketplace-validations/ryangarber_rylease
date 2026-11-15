@@ -33,6 +33,12 @@ export const pythonPublish = defineStep({
 			.describe(
 				"Globs of the distributions, relative to the component's directory; those of other versions are left out.",
 			),
+		allowNoMatch: z
+			.boolean()
+			.default(false)
+			.describe(
+				"Publish nothing, instead of failing, when there are no distributions of the version, e.g. in a job that doesn't build them.",
+			),
 		client: z.enum(["uv", "twine"]).default("uv"),
 		registry: z.string().default(PYPI).describe("The index's upload URL."),
 		token: z
@@ -46,7 +52,9 @@ export const pythonPublish = defineStep({
 		const dir = inComponent(env, component, ".").file;
 		const patterns = [options.files].flat();
 		// In a dry run, they may not be built yet, from files not yet written.
-		const all = await resolveFiles(dir, patterns).catch((error: unknown) => {
+		const all = await resolveFiles(dir, patterns, {
+			allowNoMatch: options.allowNoMatch,
+		}).catch((error: unknown) => {
 			if (env.dryRun) return [];
 			throw error;
 		});
@@ -67,6 +75,18 @@ export const pythonPublish = defineStep({
 					published: false,
 				},
 				reason: `would ${options.client} upload the distributions of ${wanted} in ${patterns.join(", ")} to ${options.registry}, once built`,
+			};
+		}
+		if (files.length === 0 && options.allowNoMatch) {
+			return {
+				output: {
+					version: wanted,
+					files: [],
+					client: options.client,
+					registry: options.registry,
+					published: false,
+				},
+				reason: `no distributions of ${wanted} in ${patterns.join(", ")}; published nothing`,
 			};
 		}
 		if (files.length === 0) {

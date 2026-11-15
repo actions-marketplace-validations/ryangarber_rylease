@@ -32,6 +32,21 @@ describe("github/upload-artifact", () => {
 		});
 	});
 
+	it("uploads nothing when nothing matches, with allowNoMatch", async () => {
+		useArtifactService(fake);
+		const report = await releaseGiven(fake, [
+			githubUploadArtifact({
+				name: "build",
+				files: ["dist/*.dmg"],
+				allowNoMatch: true,
+			}),
+		]);
+		expect(report.records[0]?.reason).toBe(
+			"no files match dist/*.dmg; uploaded nothing",
+		);
+		expect(github.artifacts.size).toBe(0);
+	});
+
 	it("uploads in dry runs only with dryRunArtifact", async () => {
 		useArtifactService(fake);
 		const step = (dryRunArtifact: boolean) =>

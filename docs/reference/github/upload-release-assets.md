@@ -8,7 +8,8 @@ Uploads files to the GitHub release, creating it (with the notes) if no other jo
 
 | Option | Type | Default | |
 |---|---|---|---|
-| `files` | `string[]` | required | Paths or globs, relative to the component's directory unless absolute; each must match. |
+| `files` | `string[]` | required | Paths or globs, relative to the component's directory unless absolute; each must match, unless `allowNoMatch`. |
+| `allowNoMatch` | `boolean` | `false` | Skip patterns that match no files instead of failing; with none matched, upload nothing, and leave the release to other steps. |
 | `clobber` | `boolean` | `true` | Replace assets of the same name. |
 | `dryRunArtifact` | `boolean` | `false` | In dry runs, keep the files as a workflow artifact instead; only in the GitHub Action. |
 | `artifactName` | `string` |  | Unique in the run; `{version}`, `{tag}` and the other placeholders are filled in. Defaults to the asset's name, or for several, a name made from theirs. |
