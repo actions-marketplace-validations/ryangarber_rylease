@@ -1,3 +1,9 @@
+## v3.2.0 (2026-11-15)
+
+### Features
+
+- add allowNoMatches option to file globs ([5ed52ca](https://github.com/ryangarber/rylease/commit/5ed52ca43fb95ab3ba393f47a82781354c1d1f3f))
+
 ## v3.1.0 (2026-10-28)
 
 ### Features
