@@ -92,4 +92,15 @@ describe("dotnet/publish", () => {
 		);
 		expect(await commands.calls()).toEqual([]);
 	});
+
+	it("pushes nothing without packages of the version, with allowNoMatch", async () => {
+		for (const files of ["**/*.nupkg", "missing/*"]) {
+			const output = await run("2.0.0", { files, allowNoMatch: true });
+			expect(output.reason).toBe(
+				`no packages of 2.0.0 in ${files}; pushed nothing`,
+			);
+			expect(output.output).toMatchObject({ files: [], published: false });
+		}
+		expect(await commands.calls()).toEqual([]);
+	});
 });

@@ -9,6 +9,7 @@ Uploads the component's built wheels and sdists of the release's version to PyPI
 | Option | Type | Default | |
 |---|---|---|---|
 | `files` | `string \| string[]` | `dist/*` | Globs of the distributions, relative to the component's directory; those of other versions are left out. |
+| `allowNoMatch` | `boolean` | `false` | Publish nothing, instead of failing, when there are no distributions of the version, e.g. in a job that doesn't build them. |
 | `client` | `uv \| twine` | `uv` |  |
 | `registry` | `string` | `https://upload.pypi.org/legacy/` | The index's upload URL. |
 | `token` | `string` |  | Defaults to `PYPI_TOKEN`; without one, the client's own auth is used, e.g. `uv`'s trusted publishing. |

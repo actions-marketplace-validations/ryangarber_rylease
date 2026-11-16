@@ -22,11 +22,12 @@ export function inComponent(
  * Resolves globs, relative to `cwd` unless absolute, to the absolute paths of
  * the files they match, sorted; a directory stands for every file in it.
  * Every pattern must match something, so a typo fails instead of uploading
- * nothing.
+ * nothing, unless `allowNoMatch` is set, as for files only some runs build.
  */
 export async function resolveFiles(
 	cwd: string,
 	patterns: readonly string[],
+	{ allowNoMatch = false }: { allowNoMatch?: boolean } = {},
 ): Promise<string[]> {
 	const files = new Set<string>();
 	for (const pattern of patterns) {
@@ -41,7 +42,8 @@ export async function resolveFiles(
 				matched = true;
 			}
 		}
-		if (!matched) throw new Error(`no files match '${pattern}'`);
+		if (!matched && !allowNoMatch)
+			throw new Error(`no files match '${pattern}'`);
 	}
 	return [...files].sort();
 }

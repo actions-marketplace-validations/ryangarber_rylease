@@ -24,7 +24,13 @@ export const githubUploadArtifact = defineStep({
 			.array(z.string())
 			.min(1)
 			.describe(
-				"Paths, globs or directories, relative to the component's directory unless absolute; each must match.",
+				"Paths, globs or directories, relative to the component's directory unless absolute; each must match, unless `allowNoMatch`.",
+			),
+		allowNoMatch: z
+			.boolean()
+			.default(false)
+			.describe(
+				"Skip patterns that match no files instead of failing; with none matched, upload nothing.",
 			),
 		dryRunArtifact: z
 			.boolean()
@@ -42,7 +48,14 @@ export const githubUploadArtifact = defineStep({
 		const files = await resolveFiles(
 			inComponent(env, component, ".").file,
 			options.files,
+			{ allowNoMatch: options.allowNoMatch },
 		);
+		if (files.length === 0) {
+			return {
+				output: { name, id: null, files: [] },
+				reason: `no files match ${options.files.join(", ")}; uploaded nothing`,
+			};
+		}
 		const listed = `${plural(files.length, "file")} as artifact ${name}`;
 		if (env.dryRun && !(options.dryRunArtifact && canUploadArtifacts())) {
 			return {

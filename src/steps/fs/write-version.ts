@@ -32,6 +32,12 @@ export const fsWriteVersion = defineStep({
 			.describe(
 				"Relative to each component's directory; globs, or a list, write several, e.g. `packages/*/package.json` for packages sharing a version. Defaults to the format's file.",
 			),
+		allowNoMatch: z
+			.boolean()
+			.default(false)
+			.describe(
+				"Skip globs that match no files instead of failing; with none matched, write nothing. Not for the `plain` format, which creates its file.",
+			),
 		pattern: z
 			.string()
 			.optional()
@@ -69,7 +75,9 @@ export const fsWriteVersion = defineStep({
 							? patterns.map(
 									(pattern) => inComponent(env, component, pattern).file,
 								)
-							: await resolveFiles(dir, patterns);
+							: await resolveFiles(dir, patterns, {
+									allowNoMatch: options.allowNoMatch,
+								});
 					return Promise.all(
 						found.map(async (file) => ({
 							file,
@@ -113,6 +121,13 @@ export const fsWriteVersion = defineStep({
 				version: result.version ?? version,
 				dependencies: result.dependencies,
 			});
+		}
+		if (written.length === 0) {
+			return {
+				output: { written: [] },
+				files: [],
+				reason: `no files match ${patterns.join(", ")}; wrote nothing`,
+			};
 		}
 		const described = joinList(
 			written.map(

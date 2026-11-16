@@ -49,6 +49,19 @@ describe("resolveFiles", () => {
 	});
 });
 
+describe("resolveFiles with allowNoMatch", () => {
+	it("skips patterns that match no files", async () => {
+		expect(
+			await resolveFiles(cwd, ["dist/*.exe", "*.dmg", "empty"], {
+				allowNoMatch: true,
+			}),
+		).toEqual([join(cwd, "dist", "b.exe")]);
+		expect(await resolveFiles(cwd, ["*.dmg"], { allowNoMatch: true })).toEqual(
+			[],
+		);
+	});
+});
+
 describe("formatSize", () => {
 	it.each([
 		[0, "0 B"],

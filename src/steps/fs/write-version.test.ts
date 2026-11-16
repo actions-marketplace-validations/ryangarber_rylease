@@ -117,6 +117,30 @@ describe("fs/write-version", () => {
 		).toMatchObject({ version: "1.1.0", dependencies: { a: "^1.1.0" } });
 	});
 
+	it("skips globs that match nothing with allowNoMatch", async () => {
+		await writeFile(
+			join(cwd, "a.csproj"),
+			"<Project><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>",
+		);
+		const output = await runStep(
+			fsWriteVersion({
+				format: "dotnet",
+				path: ["*.csproj", "missing/*.csproj"],
+				allowNoMatch: true,
+			}),
+			released("1.1.0"),
+			{ cwd },
+		);
+		expect(output.files).toEqual(["a.csproj"]);
+		const none = await runStep(
+			fsWriteVersion({ format: "cargo", allowNoMatch: true }),
+			released("1.1.0"),
+			{ cwd },
+		);
+		expect(none.reason).toBe("no files match Cargo.toml; wrote nothing");
+		expect(none.files).toEqual([]);
+	});
+
 	it("fails on missing files and versions it can't write", async () => {
 		await expect(
 			runStep(fsWriteVersion({ format: "cargo" }), released("1.1.0"), { cwd }),

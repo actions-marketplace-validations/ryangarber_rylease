@@ -9,7 +9,8 @@ Uploads files as a workflow artifact. Only works in the GitHub Action.
 | Option | Type | Default | |
 |---|---|---|---|
 | `name` | `string` | required | The artifact's name, unique in the run; `{version}`, `{tag}` and the other placeholders are filled in. |
-| `files` | `string[]` | required | Paths, globs or directories, relative to the component's directory unless absolute; each must match. |
+| `files` | `string[]` | required | Paths, globs or directories, relative to the component's directory unless absolute; each must match, unless `allowNoMatch`. |
+| `allowNoMatch` | `boolean` | `false` | Skip patterns that match no files instead of failing; with none matched, upload nothing. |
 | `dryRunArtifact` | `boolean` | `false` | Upload in dry runs too. |
 | `retentionDays` | `integer` |  | Defaults to the repository's setting. |
 

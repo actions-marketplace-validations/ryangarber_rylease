@@ -82,6 +82,16 @@ describe("github/upload-release-assets", () => {
 		).rejects.toThrow("no files match 'dist/*.dmg'");
 	});
 
+	it("skips patterns that match nothing with allowNoMatch", async () => {
+		const report = await releaseGiven(fake, [
+			githubUploadReleaseAssets({ files: ["dist/*.dmg"], allowNoMatch: true }),
+		]);
+		expect(report.records[0]?.reason).toBe(
+			"no files match dist/*.dmg; uploaded nothing",
+		);
+		expect(github.requests).toEqual([]);
+	});
+
 	it("only says what it would upload in a dry run", async () => {
 		const report = await releaseGiven(
 			fake,
